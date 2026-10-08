@@ -1,0 +1,78 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>GamePulse</title>
+<style>
+  :root { --bg:#12001f; --card:#1f0833; --accent:#00ff85; --pink:#e90052; --text:#f4f0f8; --mute:#a99ab8; }
+  * { box-sizing:border-box; }
+  body { margin:0; font-family:system-ui,sans-serif; background:var(--bg); color:var(--text); }
+  header { padding:16px 24px; display:flex; gap:16px; align-items:center; flex-wrap:wrap; border-bottom:1px solid #3b1a57; }
+  h1 { margin:0; font-size:22px; } h1 span { color:var(--accent); }
+  select, button { background:var(--card); color:var(--text); border:1px solid #4d2a6e; border-radius:6px; padding:6px 10px; }
+  button { background:var(--accent); color:#12001f; font-weight:700; border:0; cursor:pointer; }
+  main { display:grid; grid-template-columns:2fr 1fr; gap:16px; padding:16px 24px; }
+  @media (max-width:800px) { main { grid-template-columns:1fr; } }
+  .scoreboard { background:var(--card); border-radius:10px; padding:16px; text-align:center; font-size:32px; font-weight:800; }
+  .scoreboard small { display:block; font-size:14px; color:var(--mute); font-weight:400; }
+  .bar { height:14px; background:var(--pink); border-radius:7px; overflow:hidden; margin:10px 0; }
+  .bar div { height:100%; background:var(--accent); width:50%; transition:width .4s; }
+  .stats { display:grid; grid-template-columns:1fr auto 1fr; gap:4px 12px; margin-top:12px; font-size:14px; }
+  .stats .k { color:var(--mute); text-align:center; } .stats .h { text-align:right; }
+  #overlays { display:flex; flex-direction:column; gap:10px; }
+  .overlay { background:var(--card); border-left:4px solid var(--accent); padding:10px 14px; border-radius:8px; animation:in .4s; }
+  .overlay.goal { border-color:var(--pink); } .overlay h3 { margin:0 0 4px; font-size:16px; }
+  .overlay p { margin:4px 0; } .why { color:var(--mute); font-size:13px; }
+  @keyframes in { from { opacity:0; transform:translateY(-8px); } }
+</style>
+</head>
+<body>
+<header>
+  <h1>Game<span>Pulse</span></h1>
+  <label>Mode <select id="mode"><option value="casual">Casual fan</option><option value="analyst">Analyst</option></select></label>
+  <label>Language <select id="lang"><option value="en">English</option><option value="fr">Français</option><option value="es">Español</option></select></label>
+  <label>Scenario <select id="scenario"><option>balanced</option><option>comeback</option><option>red_card</option></select></label>
+  <label>My team <select id="team"><option value="">-</option><option value="RVR">Riverside FC</option><option value="NTH">Northgate United</option></select></label>
+  <button id="go">Kick off</button>
+</header>
+<main>
+  <section>
+    <div class="scoreboard"><span id="hn">-</span> <span id="sc">0 - 0</span> <span id="an">-</span><small id="min">0'</small></div>
+    <div class="bar" title="Momentum"><div id="mom"></div></div>
+    <div class="stats" id="stats"></div>
+  </section>
+  <section><h2>Live insights</h2><div id="overlays"></div></section>
+</main>
+<script>
+let es, meta;
+const $ = id => document.getElementById(id);
+$("go").onclick = () => {
+  if (es) es.close();
+  $("overlays").innerHTML = "";
+  const q = new URLSearchParams({ mode: $("mode").value, lang: $("lang").value, scenario: $("scenario").value, speed: 90 });
+  if ($("team").value) q.set("team", $("team").value);
+  es = new EventSource("/api/match/stream?" + q);
+  es.addEventListener("meta", e => { meta = JSON.parse(e.data); $("hn").textContent = meta.home; $("an").textContent = meta.away; });
+  es.addEventListener("end", () => es.close());
+  es.onmessage = e => render(JSON.parse(e.data));
+};
+function render({ snapshot: s, overlays }) {
+  if (!meta) return;
+  const h = s.stats[meta.home_id], a = s.stats[meta.away_id];
+  $("sc").textContent = `${s.score[meta.home_id]} - ${s.score[meta.away_id]}`;
+  $("min").textContent = `${s.minute}'`;
+  $("mom").style.width = (50 + s.momentum / 2) + "%";
+  const rows = [["Shots", h.shots, a.shots], ["xG", h.xg, a.xg], ["Pass acc %", h.pass_acc, a.pass_acc],
+                ["Tackles won", h.tackles_won, a.tackles_won], ["Pressures", h.pressures, a.pressures]];
+  $("stats").innerHTML = rows.map(r => `<div class="h">${r[1]}</div><div class="k">${r[0]}</div><div>${r[2]}</div>`).join("");
+  for (const o of overlays) {
+    const d = document.createElement("div");
+    d.className = "overlay " + o.kind;
+    d.innerHTML = `<h3>${o.at_minute}' ${o.headline}</h3><p>${o.body}</p><p class="why">Why it matters: ${o.explanation}</p>`;
+    $("overlays").prepend(d);
+  }
+}
+</script>
+</body>
+</html>
