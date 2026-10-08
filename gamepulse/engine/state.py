@@ -55,6 +55,8 @@ class MatchState:
     player_stats: dict[str, dict[str, float]] = field(default_factory=lambda: defaultdict(lambda: defaultdict(float)))
     moments: list[Moment] = field(default_factory=list)
     minute: int = 0
+    poss_time: dict[str, float] = field(default_factory=dict)
+    _last_t: float = 0.0
     _window: deque = field(default_factory=deque)
     _momentum_hist: list[tuple[float, float]] = field(default_factory=list)  # (clock, home-away)
     _last_swing_clock: float = -99.0
@@ -63,6 +65,7 @@ class MatchState:
     def __post_init__(self):
         self.score = {self.home: 0, self.away: 0}
         self.stats = {self.home: TeamStats(), self.away: TeamStats()}
+        self.poss_time = {self.home: 0.0, self.away: 0.0}
 
     # ------------------------------------------------------------ ingestion
     def ingest(self, ev: Event) -> list[Moment]:
@@ -113,6 +116,26 @@ class MatchState:
         new.extend(self._detect_swings(ev))
         self.moments.extend(new)
         return new
+
+    def observe_frame(self, t: float, poss: str):
+        """Track possession time from simulation frames."""
+        if poss in self.poss_time:
+            self.poss_time[poss] += max(0.0, t - self._last_t)
+        self._last_t = t
+
+    def possession(self) -> dict[str, float]:
+        tot = sum(self.poss_time.values())
+        if tot <= 0:
+            return {self.home: 50.0, self.away: 50.0}
+        return {k: round(100 * v / tot, 1) for k, v in self.poss_time.items()}
+
+    def pressure_window(self) -> dict[str, int]:
+        """Pressing actions (pressures + tackles) per team in the rolling window."""
+        out = {self.home: 0, self.away: 0}
+        for e in self._window:
+            if e.type in ("pressure", "tackle") and e.team in out:
+                out[e.team] += 1
+        return out
 
     # ------------------------------------------------------------ momentum
     def _weight(self, ev: Event) -> float:
@@ -176,6 +199,8 @@ class MatchState:
             "minute": self.minute,
             "score": self.score,
             "momentum": self.momentum(),
+            "possession": self.possession(),
+            "pressure": self.pressure_window(),
             "control_vs_chaos": self.control_vs_chaos(),
             "stats": {t: {**s.__dict__, "pass_acc": s.pass_acc, "xg": round(s.xg, 2)} for t, s in self.stats.items()},
         }

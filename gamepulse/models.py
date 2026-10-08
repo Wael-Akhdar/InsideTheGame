@@ -5,7 +5,7 @@ from dataclasses import asdict, dataclass, field
 from typing import Any, Optional
 
 EVENT_TYPES = (
-    "kickoff", "pass", "shot", "tackle", "possession_change",
+    "kickoff", "pass", "shot", "dribble", "tackle", "possession_change",
     "pressure", "foul", "card", "goal", "save", "halftime", "fulltime",
 )
 
@@ -17,6 +17,9 @@ class Player:
     team: str
     number: int
     position: str  # GK, DF, MF, FW
+    slot: str = ""  # formation slot, e.g. "LCB"
+    role: str = ""  # tactical role, e.g. "ball_playing"
+    attrs: dict[str, float] = field(default_factory=dict)  # passing, dribbling, shooting, ...
 
 
 @dataclass
@@ -24,7 +27,7 @@ class Team:
     id: str
     name: str
     short: str
-    style: dict[str, float]  # possession, pressing, directness, finishing (0..1)
+    tactic: Any = None  # gamepulse.tactics.Tactic
     players: list[Player] = field(default_factory=list)
 
 
@@ -66,3 +69,11 @@ class Moment:
 
     def to_dict(self) -> dict[str, Any]:
         return asdict(self)
+
+
+@dataclass
+class Tick:
+    """One simulation step: a snapshot of all 22 players + the ball, and the events that happened."""
+    t: float  # seconds since kickoff
+    frame: dict[str, Any]  # {"t", "minute", "ball": [x, y], "poss", "carrier", "p": [[x, y] * 22]} (global coords)
+    events: list[Event] = field(default_factory=list)

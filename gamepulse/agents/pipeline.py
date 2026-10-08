@@ -132,6 +132,15 @@ class Orchestrator:
         self.narrator = NarratorAgent(llm, teams)
         self.persona = PersonaAgent(llm, teams)
 
+    def process_tick(self, tick, viewer: Viewer, threshold: float = 0.55) -> list[Overlay]:
+        """Feed one simulation tick (frame + events) through the agent chain."""
+        if tick.frame:
+            self.state.observe_frame(tick.t, tick.frame["poss"])
+        overlays: list[Overlay] = []
+        for ev in tick.events:
+            overlays.extend(self.process(ev, viewer, threshold))
+        return overlays
+
     def process(self, ev: Event, viewer: Viewer, threshold: float = 0.55) -> list[Overlay]:
         moments = self.state.ingest(ev)  # stats + moment detection
         overlays = []

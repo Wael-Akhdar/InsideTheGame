@@ -1,9 +1,14 @@
 # GamePulse
 
 **Feel the match, understand the moment.**
-A multi-agent AI engine that turns live (synthetic) football events into explained key moments, real-time narratives and recaps, personalized per fan and per language.
+A tactical football lab and live match intelligence engine. Coaches design a formation, give every player a role, set team instructions, then watch the match unfold live (22 players on the pitch, live charts) or stress-test the tactic over hundreds of simulated matches against other tactics. A multi-agent AI layer explains every key moment, in the viewer's language and style.
 
 Built for the *Inside the Game: Developer Hackathon* (Microsoft x Premier League). All data is synthetic: clubs and players are fictional.
+
+## Three modes
+1. **Live match**: 22 players move on a pitch in real time; possession, xG, pressing and momentum charts update live; agents write explained insights.
+2. **Tactics**: formation (4-3-3, 4-4-2, 4-2-3-1, 3-5-2, 5-3-2, 3-4-3), one role per player, five team instructions (line height, pressing, width, tempo, directness). Saved in the browser, exportable as JSON.
+3. **Tactic Lab**: plays your tactic against any set of opponents (n matches each, half home / half away, in parallel) and reports W/D/L, xG balance, possession, PPDA, a robustness score and a plain-language diagnosis (e.g. "your high line is exposed by direct play").
 
 ## Pipeline
 
@@ -21,7 +26,7 @@ pip install -r requirements.txt
 cp .env.example .env            # optional: add Azure OpenAI / Foundry credentials
 python -m pytest -q -p no:anyio tests
 uvicorn gamepulse.api.server:app --reload
-# open http://127.0.0.1:8000
+# open http://127.0.0.1:8000   (add #demo to auto-start a match, #lab to auto-run the lab)
 ```
 
 Without Azure credentials the narrator uses deterministic templates, so everything runs offline.
@@ -31,7 +36,9 @@ With `AZURE_OPENAI_*` set, narration and translation go through your Foundry dep
 
 | Path | What |
 |---|---|
-| `gamepulse/simulator/` | Seeded synthetic match generator (styles, pressing, scenarios) |
+| `gamepulse/tactics.py` | Formations, roles, team instructions, presets |
+| `gamepulse/simulator/` | Seeded tactical simulator: player positions, pressing, passing, dribbles, shots, fatigue |
+| `gamepulse/lab.py` | Tactic Lab: headless batch simulation, aggregation, insights |
 | `gamepulse/engine/state.py` | Live stats, momentum, control-vs-chaos, key-moment detection |
 | `gamepulse/agents/pipeline.py` | Agents (Explainer, Narrator, Persona) and the orchestrator |
 | `gamepulse/agents/llm.py` | Azure OpenAI client with offline fallback |

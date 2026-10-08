@@ -5,74 +5,429 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>GamePulse</title>
 <style>
-  :root { --bg:#12001f; --card:#1f0833; --accent:#00ff85; --pink:#e90052; --text:#f4f0f8; --mute:#a99ab8; }
+  :root { --bg:#12001f; --panel:#1b0730; --panel2:#250a3f; --line:#3b1a57; --accent:#00ff85; --pink:#e90052; --text:#f4f0f8; --mute:#a99ab8; --warn:#ffb020; }
   * { box-sizing:border-box; }
-  body { margin:0; font-family:system-ui,sans-serif; background:var(--bg); color:var(--text); }
-  header { padding:16px 24px; display:flex; gap:16px; align-items:center; flex-wrap:wrap; border-bottom:1px solid #3b1a57; }
-  h1 { margin:0; font-size:22px; } h1 span { color:var(--accent); }
-  select, button { background:var(--card); color:var(--text); border:1px solid #4d2a6e; border-radius:6px; padding:6px 10px; }
-  button { background:var(--accent); color:#12001f; font-weight:700; border:0; cursor:pointer; }
-  main { display:grid; grid-template-columns:2fr 1fr; gap:16px; padding:16px 24px; }
-  @media (max-width:800px) { main { grid-template-columns:1fr; } }
-  .scoreboard { background:var(--card); border-radius:10px; padding:16px; text-align:center; font-size:32px; font-weight:800; }
-  .scoreboard small { display:block; font-size:14px; color:var(--mute); font-weight:400; }
-  .bar { height:14px; background:var(--pink); border-radius:7px; overflow:hidden; margin:10px 0; }
-  .bar div { height:100%; background:var(--accent); width:50%; transition:width .4s; }
-  .stats { display:grid; grid-template-columns:1fr auto 1fr; gap:4px 12px; margin-top:12px; font-size:14px; }
-  .stats .k { color:var(--mute); text-align:center; } .stats .h { text-align:right; }
-  #overlays { display:flex; flex-direction:column; gap:10px; }
-  .overlay { background:var(--card); border-left:4px solid var(--accent); padding:10px 14px; border-radius:8px; animation:in .4s; }
-  .overlay.goal { border-color:var(--pink); } .overlay h3 { margin:0 0 4px; font-size:16px; }
-  .overlay p { margin:4px 0; } .why { color:var(--mute); font-size:13px; }
-  @keyframes in { from { opacity:0; transform:translateY(-8px); } }
+  body { margin:0; font-family:system-ui,-apple-system,Segoe UI,sans-serif; background:var(--bg); color:var(--text); }
+  header { display:flex; align-items:center; gap:24px; padding:10px 24px; border-bottom:1px solid var(--line); flex-wrap:wrap; }
+  h1 { margin:0; font-size:22px; letter-spacing:.3px; } h1 span { color:var(--accent); }
+  nav { display:flex; gap:4px; }
+  nav button { background:transparent; color:var(--mute); border:0; padding:8px 14px; border-radius:8px; font-size:14px; cursor:pointer; }
+  nav button.on { background:var(--panel2); color:var(--text); }
+  select, input[type=text], textarea { background:var(--panel); color:var(--text); border:1px solid #4d2a6e; border-radius:6px; padding:6px 8px; font:inherit; font-size:13px; }
+  button.primary { background:var(--accent); color:#12001f; font-weight:700; border:0; border-radius:8px; padding:8px 16px; cursor:pointer; }
+  button.ghost { background:var(--panel2); color:var(--text); border:1px solid #4d2a6e; border-radius:8px; padding:7px 12px; cursor:pointer; font-size:13px; }
+  button:disabled { opacity:.5; cursor:wait; }
+  label.f { display:flex; flex-direction:column; gap:3px; font-size:11px; color:var(--mute); text-transform:uppercase; letter-spacing:.5px; }
+  .bar { display:flex; gap:14px; align-items:flex-end; flex-wrap:wrap; padding:12px 24px; background:var(--panel); border-bottom:1px solid var(--line); }
+  .tab { display:none; } .tab.on { display:block; }
+  .grid { display:grid; grid-template-columns:minmax(0,1.6fr) minmax(300px,1fr); gap:16px; padding:16px 24px; }
+  @media (max-width:1000px) { .grid { grid-template-columns:1fr; } }
+  .card { background:var(--panel); border:1px solid var(--line); border-radius:12px; padding:12px 14px; }
+  .card h3 { margin:0 0 6px; font-size:12px; text-transform:uppercase; letter-spacing:.6px; color:var(--mute); display:flex; justify-content:space-between; }
+  .card h3 b { color:var(--text); font-size:13px; letter-spacing:0; text-transform:none; }
+  .score { display:flex; align-items:center; justify-content:center; gap:20px; padding:10px 0; }
+  .score .t { flex:1; font-size:15px; } .score .t small { display:block; color:var(--mute); font-size:11px; }
+  .score .t.h { text-align:right; } .score .t.h b { color:var(--accent); } .score .t.a b { color:var(--pink); }
+  .score .s { font-size:38px; font-weight:800; letter-spacing:2px; text-align:center; } .score .s small { display:block; font-size:12px; color:var(--mute); font-weight:400; letter-spacing:0; }
+  #pitch { width:100%; aspect-ratio:105/68; display:block; border-radius:10px; background:#0b6b3a; }
+  .legend { display:flex; gap:14px; font-size:12px; color:var(--mute); margin-top:6px; }
+  .dot { display:inline-block; width:10px; height:10px; border-radius:50%; margin-right:5px; }
+  .charts { display:grid; gap:12px; } .chart canvas { width:100%; height:110px; display:block; }
+  table.st { width:100%; font-size:13px; border-collapse:collapse; } table.st td { padding:3px 0; } table.st td:first-child { text-align:right; width:30%; } table.st td:last-child { width:30%; } table.st td.k { text-align:center; color:var(--mute); }
+  #overlays { display:flex; flex-direction:column; gap:8px; margin-top:12px; max-height:340px; overflow:auto; }
+  .overlay { background:var(--panel2); border-left:4px solid var(--accent); padding:8px 12px; border-radius:8px; }
+  .overlay.goal { border-color:var(--pink); } .overlay h4 { margin:0 0 3px; font-size:14px; } .overlay p { margin:3px 0; font-size:13px; } .why { color:var(--mute); font-size:12px !important; }
+  /* tactics editor */
+  .ed { display:grid; grid-template-columns:minmax(0,1fr) 380px; gap:16px; padding:16px 24px; } @media (max-width:1000px) { .ed { grid-template-columns:1fr; } }
+  .slots { display:grid; grid-template-columns:repeat(auto-fill,minmax(210px,1fr)); gap:8px; margin-top:10px; }
+  .slot { background:var(--panel2); border-radius:8px; padding:6px 8px; font-size:12px; display:flex; flex-direction:column; gap:3px; } .slot b { color:var(--accent); font-size:12px; }
+  .sl { display:grid; grid-template-columns:110px 1fr 36px; align-items:center; gap:8px; font-size:13px; margin:8px 0; } .sl small { color:var(--mute); } input[type=range] { accent-color:var(--accent); width:100%; }
+  #prev { width:100%; aspect-ratio:105/68; border-radius:10px; display:block; }
+  .row { display:flex; gap:8px; flex-wrap:wrap; align-items:center; margin-top:10px; }
+  /* lab */
+  .labg { display:grid; grid-template-columns:300px minmax(0,1fr); gap:16px; padding:16px 24px; } @media (max-width:1000px) { .labg { grid-template-columns:1fr; } }
+  .opp { display:flex; gap:8px; align-items:center; font-size:13px; padding:3px 0; }
+  table.lab { width:100%; border-collapse:collapse; font-size:13px; } table.lab th { text-align:left; color:var(--mute); font-weight:500; font-size:11px; text-transform:uppercase; padding:4px 6px; } table.lab td { padding:6px; border-top:1px solid var(--line); }
+  .wdl { display:flex; height:10px; border-radius:5px; overflow:hidden; min-width:110px; } .wdl i { display:block; height:100%; } .w { background:var(--accent); } .d { background:#7d6a92; } .l { background:var(--pink); }
+  .big { font-size:46px; font-weight:800; } .big small { font-size:14px; color:var(--mute); font-weight:400; }
+  .ins { padding:8px 12px; border-radius:8px; margin:6px 0; font-size:13px; background:var(--panel2); border-left:4px solid var(--mute); } .ins.good { border-color:var(--accent); } .ins.warn { border-color:var(--warn); } .ins.bad { border-color:var(--pink); }
+  #tip { position:fixed; pointer-events:none; background:#000c; padding:4px 8px; border-radius:6px; font-size:12px; display:none; z-index:9; }
 </style>
 </head>
 <body>
 <header>
   <h1>Game<span>Pulse</span></h1>
-  <label>Mode <select id="mode"><option value="casual">Casual fan</option><option value="analyst">Analyst</option></select></label>
-  <label>Language <select id="lang"><option value="en">English</option><option value="fr">Français</option><option value="es">Español</option></select></label>
-  <label>Scenario <select id="scenario"><option>balanced</option><option>comeback</option><option>red_card</option></select></label>
-  <label>My team <select id="team"><option value="">-</option><option value="RVR">Riverside FC</option><option value="NTH">Northgate United</option></select></label>
-  <button id="go">Kick off</button>
+  <nav>
+    <button data-tab="match" class="on">Live match</button>
+    <button data-tab="tactics">Tactics</button>
+    <button data-tab="lab">Tactic Lab</button>
+  </nav>
 </header>
-<main>
-  <section>
-    <div class="scoreboard"><span id="hn">-</span> <span id="sc">0 - 0</span> <span id="an">-</span><small id="min">0'</small></div>
-    <div class="bar" title="Momentum"><div id="mom"></div></div>
-    <div class="stats" id="stats"></div>
-  </section>
-  <section><h2>Live insights</h2><div id="overlays"></div></section>
-</main>
+
+<!-- ====================================================== MATCH -->
+<section id="tab-match" class="tab on">
+  <div class="bar">
+    <label class="f">Home tactic <select id="mHome"></select></label>
+    <label class="f">Away tactic <select id="mAway"></select></label>
+    <label class="f">View <select id="mMode"><option value="casual">Casual fan</option><option value="analyst">Analyst</option></select></label>
+    <label class="f">Language <select id="mLang"><option value="en">English</option><option value="fr">Français</option><option value="es">Español</option><option value="ar">العربية</option></select></label>
+    <label class="f">Speed <select id="mSpeed"><option value="30">x30</option><option value="60" selected>x60</option><option value="150">x150</option><option value="400">x400</option></select></label>
+    <label class="f">Seed <input type="text" id="mSeed" value="42" size="5"></label>
+    <button class="primary" id="go">Kick off</button>
+    <button class="ghost" id="stop">Stop</button>
+  </div>
+  <div class="grid">
+    <div>
+      <div class="card">
+        <div class="score">
+          <div class="t h"><b id="hn">Riverside FC</b><small id="ht"></small></div>
+          <div class="s"><span id="sc">0 - 0</span><small id="clock">00:00</small></div>
+          <div class="t a"><b id="an">Northgate United</b><small id="at"></small></div>
+        </div>
+        <canvas id="pitch" width="1050" height="680"></canvas>
+        <div class="legend"><span><i class="dot" style="background:#00ff85"></i>Home</span><span><i class="dot" style="background:#e90052"></i>Away</span><span>○ pressure zone around the ball carrier · hover a player for details</span></div>
+      </div>
+      <div class="card" style="margin-top:12px"><h3>Live insights <b id="ovn"></b></h3><div id="overlays"></div></div>
+    </div>
+    <div class="charts">
+      <div class="card chart"><h3>Possession <b id="cPoss"></b></h3><canvas id="chPoss"></canvas></div>
+      <div class="card chart"><h3>Expected goals (cumulative) <b id="cXg"></b></h3><canvas id="chXg"></canvas></div>
+      <div class="card chart"><h3>Pressing actions / 5 min <b id="cPress"></b></h3><canvas id="chPress"></canvas></div>
+      <div class="card chart"><h3>Momentum <b id="cMom"></b></h3><canvas id="chMom"></canvas></div>
+      <div class="card"><h3>Match stats</h3><table class="st" id="stats"></table></div>
+    </div>
+  </div>
+</section>
+
+<!-- ====================================================== TACTICS -->
+<section id="tab-tactics" class="tab">
+  <div class="ed">
+    <div class="card">
+      <div class="row" style="margin-top:0">
+        <label class="f">Start from <select id="tPreset"></select></label>
+        <label class="f">Name <input type="text" id="tName" size="22"></label>
+        <label class="f">Formation <select id="tForm"></select></label>
+      </div>
+      <h3 style="margin-top:16px">Player roles</h3>
+      <div class="slots" id="slots"></div>
+      <h3 style="margin-top:18px">Team instructions</h3>
+      <div id="sliders"></div>
+      <div class="row">
+        <button class="primary" id="tSave">Save tactic</button>
+        <button class="ghost" id="tDel">Delete</button>
+        <button class="ghost" id="tExport">Export JSON</button>
+        <button class="ghost" id="tImport">Import JSON</button>
+      </div>
+      <textarea id="tJson" rows="5" style="width:100%;margin-top:10px;display:none"></textarea>
+      <p style="color:var(--mute);font-size:12px">Saved tactics live in your browser and appear in the Live match and Tactic Lab selectors.</p>
+    </div>
+    <div class="card"><h3>Shape preview <b id="pvName"></b></h3><canvas id="prev" width="840" height="544"></canvas>
+      <p style="color:var(--mute);font-size:12px;margin:8px 0 0">Positions shown when your team has the ball, with the current line height and width.</p></div>
+  </div>
+</section>
+
+<!-- ====================================================== LAB -->
+<section id="tab-lab" class="tab">
+  <div class="labg">
+    <div class="card">
+      <h3>Your tactic</h3>
+      <select id="lTactic" style="width:100%"></select>
+      <h3 style="margin-top:16px">Opponents <span><a href="#" id="lAll" style="color:var(--accent);font-size:11px">all</a></span></h3>
+      <div id="lOpps"></div>
+      <h3 style="margin-top:16px">Matches per opponent <b id="lnv">20</b></h3>
+      <input type="range" id="lN" min="8" max="40" step="4" value="20">
+      <button class="primary" id="lRun" style="width:100%;margin-top:14px">Run simulations</button>
+      <p style="color:var(--mute);font-size:12px">Each opponent is played n times (half at home, half away) with different seeds.</p>
+    </div>
+    <div id="lOut"><div class="card" style="color:var(--mute)">Pick your tactic, choose the opponents it must survive, and run the Lab. You get win/draw/loss rates per opponent, the expected goals balance and a plain-language diagnosis of what breaks.</div></div>
+  </div>
+</section>
+
+<div id="tip"></div>
+
 <script>
-let es, meta;
 const $ = id => document.getElementById(id);
-$("go").onclick = () => {
-  if (es) es.close();
-  $("overlays").innerHTML = "";
-  const q = new URLSearchParams({ mode: $("mode").value, lang: $("lang").value, scenario: $("scenario").value, speed: 90 });
-  if ($("team").value) q.set("team", $("team").value);
-  es = new EventSource("/api/match/stream?" + q);
-  es.addEventListener("meta", e => { meta = JSON.parse(e.data); $("hn").textContent = meta.home; $("an").textContent = meta.away; });
-  es.addEventListener("end", () => es.close());
-  es.onmessage = e => render(JSON.parse(e.data));
-};
-function render({ snapshot: s, overlays }) {
-  if (!meta) return;
-  const h = s.stats[meta.home_id], a = s.stats[meta.away_id];
-  $("sc").textContent = `${s.score[meta.home_id]} - ${s.score[meta.away_id]}`;
-  $("min").textContent = `${s.minute}'`;
-  $("mom").style.width = (50 + s.momentum / 2) + "%";
-  const rows = [["Shots", h.shots, a.shots], ["xG", h.xg, a.xg], ["Pass acc %", h.pass_acc, a.pass_acc],
-                ["Tackles won", h.tackles_won, a.tackles_won], ["Pressures", h.pressures, a.pressures]];
-  $("stats").innerHTML = rows.map(r => `<div class="h">${r[1]}</div><div class="k">${r[0]}</div><div>${r[2]}</div>`).join("");
-  for (const o of overlays) {
-    const d = document.createElement("div");
-    d.className = "overlay " + o.kind;
-    d.innerHTML = `<h3>${o.at_minute}' ${o.headline}</h3><p>${o.body}</p><p class="why">Why it matters: ${o.explanation}</p>`;
-    $("overlays").prepend(d);
+const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
+const HOME = "#00ff85", AWAY = "#e90052";
+let catalog = null;
+let mine = {};  // saved tactics
+try { mine = JSON.parse(localStorage.getItem("gp_tactics") || "{}"); } catch (e) {}
+
+/* ---------------------------------------------------------------- tabs */
+document.querySelectorAll("nav button").forEach(b => b.onclick = () => {
+  document.querySelectorAll("nav button").forEach(x => x.classList.toggle("on", x === b));
+  document.querySelectorAll(".tab").forEach(t => t.classList.toggle("on", t.id === "tab-" + b.dataset.tab));
+  if (b.dataset.tab === "tactics") drawPreview();
+});
+
+/* ---------------------------------------------------------------- catalog / tactics */
+const allTactics = () => Object.fromEntries([...catalog.presets.map(t => [t.name, t]), ...Object.entries(mine)]);
+const isPreset = name => catalog.presets.some(t => t.name === name);
+const tacticParam = name => isPreset(name) ? name : JSON.stringify(mine[name]);
+
+function fillSelect(sel, selected) {
+  const names = Object.keys(allTactics());
+  sel.innerHTML = names.map(n => `<option ${n === selected ? "selected" : ""}>${n}${isPreset(n) ? "" : " ★"}</option>`).join("");
+}
+const selVal = sel => sel.value.replace(/ ★$/, "");
+
+function refreshSelectors() {
+  fillSelect($("mHome"), selVal($("mHome")) || "Possession 4-3-3");
+  fillSelect($("mAway"), selVal($("mAway")) || "Counter-attack 4-4-2");
+  fillSelect($("lTactic"), selVal($("lTactic")) || "Balanced 4-3-3");
+  fillSelect($("tPreset"), "");
+  $("tPreset").insertAdjacentHTML("afterbegin", "<option value=''>— choose —</option>");
+  $("tPreset").value = "";
+  renderOpps();
+}
+
+function renderOpps() {
+  const me = selVal($("lTactic"));
+  const prev = new Set([...document.querySelectorAll("#lOpps input:checked")].map(i => i.value));
+  $("lOpps").innerHTML = Object.keys(allTactics()).filter(n => n !== me).map(n =>
+    `<label class="opp"><input type="checkbox" value="${n}" ${prev.size === 0 || prev.has(n) ? "checked" : ""}>${n}${isPreset(n) ? "" : " ★"}</label>`).join("");
+}
+
+/* ---------------------------------------------------------------- pitch drawing */
+function drawPitchLines(ctx, W, H) {
+  ctx.fillStyle = "#0b6b3a"; ctx.fillRect(0, 0, W, H);
+  for (let i = 0; i < 14; i++) { ctx.fillStyle = i % 2 ? "#0d7440" : "#0b6b3a"; ctx.fillRect(i * W / 14, 0, W / 14, H); }
+  ctx.strokeStyle = "#ffffffcc"; ctx.lineWidth = 2;
+  const X = x => x / 100 * W, Y = y => y / 100 * H;
+  ctx.strokeRect(X(1), Y(2), W - X(2), H - Y(4));
+  ctx.beginPath(); ctx.moveTo(X(50), Y(2)); ctx.lineTo(X(50), Y(98)); ctx.stroke();
+  ctx.beginPath(); ctx.arc(X(50), Y(50), W * 0.0871, 0, 7); ctx.stroke();
+  for (const s of [0, 1]) {
+    const bx = s ? W - X(1) : X(1), dir = s ? -1 : 1;
+    ctx.strokeRect(s ? W - X(1) - W * 0.157 : X(1), Y(50) - H * 0.296, W * 0.157, H * 0.592);
+    ctx.strokeRect(s ? W - X(1) - W * 0.052 : X(1), Y(50) - H * 0.134, W * 0.052, H * 0.268);
+    ctx.beginPath(); ctx.arc(bx + dir * W * 0.105, Y(50), 3, 0, 7); ctx.fillStyle = "#fff"; ctx.fill();
   }
 }
+
+/* live pitch state */
+const pc = $("pitch"), pctx = pc.getContext("2d");
+let teams = null, names = {}, ids = [];
+let cur = null, prev = null, tStart = 0, dur = 100, lastArr = 0, shown = null;
+
+function lerpState(now) {
+  if (!cur) return null;
+  if (!prev) return cur;
+  const a = clamp((now - tStart) / dur, 0, 1);
+  return { ball: [prev.ball[0] + (cur.ball[0] - prev.ball[0]) * a, prev.ball[1] + (cur.ball[1] - prev.ball[1]) * a],
+           p: cur.p.map((q, i) => [prev.p[i][0] + (q[0] - prev.p[i][0]) * a, prev.p[i][1] + (q[1] - prev.p[i][1]) * a]),
+           carrier: cur.carrier, off: cur.off || [], poss: cur.poss };
+}
+
+function renderPitch(now) {
+  const W = pc.width, H = pc.height;
+  drawPitchLines(pctx, W, H);
+  const s = shown = lerpState(now);
+  if (s) {
+    const X = x => x / 100 * W, Y = y => y / 100 * H;
+    const ci = ids.indexOf(s.carrier);
+    if (ci >= 0) { // pressure zone: 10 m around the carrier
+      pctx.beginPath(); pctx.ellipse(X(s.p[ci][0]), Y(s.p[ci][1]), 10 / 1.05 / 100 * W, 10 / 0.68 / 100 * H, 0, 0, 7);
+      pctx.fillStyle = "#ffffff18"; pctx.fill(); pctx.setLineDash([6, 5]); pctx.strokeStyle = "#ffffff77"; pctx.lineWidth = 1.5; pctx.stroke(); pctx.setLineDash([]);
+    }
+    s.p.forEach((q, i) => {
+      if (s.off.includes(i)) return;
+      const home = i < 11, x = X(q[0]), y = Y(q[1]);
+      pctx.beginPath(); pctx.arc(x, y, 15, 0, 7); pctx.fillStyle = home ? HOME : AWAY; pctx.fill();
+      pctx.lineWidth = i === ci ? 4 : 2; pctx.strokeStyle = i === ci ? "#fff" : "#12001f"; pctx.stroke();
+      pctx.fillStyle = home ? "#12001f" : "#fff"; pctx.font = "bold 14px system-ui"; pctx.textAlign = "center"; pctx.textBaseline = "middle";
+      pctx.fillText(teams ? (home ? teams.home : teams.away).players[i % 11].number : "", x, y + 1);
+    });
+    pctx.beginPath(); pctx.arc(X(s.ball[0]), Y(s.ball[1]), 7, 0, 7); pctx.fillStyle = "#fff"; pctx.fill(); pctx.lineWidth = 2; pctx.strokeStyle = "#000"; pctx.stroke();
+  }
+  requestAnimationFrame(renderPitch);
+}
+requestAnimationFrame(renderPitch);
+
+pc.onmousemove = e => {
+  const tip = $("tip");
+  if (!shown || !teams) { tip.style.display = "none"; return; }
+  const r = pc.getBoundingClientRect(), mx = (e.clientX - r.left) / r.width * 100, my = (e.clientY - r.top) / r.height * 100;
+  let best = -1, bd = 3.2;
+  shown.p.forEach((q, i) => { const d = Math.hypot((q[0] - mx) * 1.05, (q[1] - my) * 0.68) / 0.7; if (d < bd) { bd = d; best = i; } });
+  if (best < 0) { tip.style.display = "none"; return; }
+  const t = best < 11 ? teams.home : teams.away, p = t.players[best % 11];
+  tip.innerHTML = `<b>#${p.number} ${p.name}</b><br>${p.slot} · ${catalog.roles[p.role]?.label || p.role}`;
+  tip.style.left = e.clientX + 14 + "px"; tip.style.top = e.clientY + 10 + "px"; tip.style.display = "block";
+};
+pc.onmouseleave = () => $("tip").style.display = "none";
+
+/* ---------------------------------------------------------------- charts */
+function chart(canvas, series, o) {
+  const dpr = devicePixelRatio || 1, w = canvas.clientWidth, h = canvas.clientHeight;
+  if (canvas.width !== w * dpr) { canvas.width = w * dpr; canvas.height = h * dpr; }
+  const c = canvas.getContext("2d"); c.setTransform(dpr, 0, 0, dpr, 0, 0); c.clearRect(0, 0, w, h);
+  const L = 26, B = 16, T = 6, R = 6, pw = w - L - R, ph = h - T - B;
+  const X = x => L + x / 95 * pw, Y = y => T + (1 - (y - o.min) / (o.max - o.min)) * ph;
+  c.font = "10px system-ui"; c.fillStyle = "#a99ab8"; c.strokeStyle = "#3b1a57"; c.lineWidth = 1; c.textAlign = "right";
+  (o.ticks || [o.min, (o.min + o.max) / 2, o.max]).forEach(v => { c.beginPath(); c.moveTo(L, Y(v)); c.lineTo(w - R, Y(v)); c.stroke(); c.fillText(Math.round(v * 10) / 10, L - 4, Y(v) + 3); });
+  c.textAlign = "center"; [0, 15, 30, 45, 60, 75, 90].forEach(m => c.fillText(m, X(m), h - 3));
+  c.strokeStyle = "#ffffff55"; c.setLineDash([3, 3]); c.beginPath(); c.moveTo(X(45), T); c.lineTo(X(45), T + ph); c.stroke(); c.setLineDash([]);
+  for (const s of series) {
+    if (!s.pts.length) continue;
+    const base = Y(o.base ?? o.min);
+    c.beginPath(); s.pts.forEach(([x, y], i) => i ? c.lineTo(X(x), Y(y)) : c.moveTo(X(x), Y(y)));
+    if (s.fill) { c.lineTo(X(s.pts.at(-1)[0]), base); c.lineTo(X(s.pts[0][0]), base); c.closePath(); c.fillStyle = s.color + "33"; c.fill(); c.beginPath(); s.pts.forEach(([x, y], i) => i ? c.lineTo(X(x), Y(y)) : c.moveTo(X(x), Y(y))); }
+    c.strokeStyle = s.color; c.lineWidth = 2; c.stroke();
+  }
+}
+
+let hist = {};
+function redrawCharts() {
+  const ms = Object.keys(hist).map(Number).sort((a, b) => a - b), H = teams.home.id, A = teams.away.id;
+  const line = f => ms.map(m => [m, f(hist[m])]);
+  chart($("chPoss"), [{ pts: line(s => s.possession[H]), color: HOME, fill: true }], { min: 0, max: 100, base: 50, ticks: [0, 50, 100] });
+  chart($("chXg"), [{ pts: line(s => s.stats[H].xg), color: HOME }, { pts: line(s => s.stats[A].xg), color: AWAY }],
+        { min: 0, max: Math.max(1.5, ...ms.map(m => Math.max(hist[m].stats[H].xg, hist[m].stats[A].xg))) * 1.1 });
+  chart($("chPress"), [{ pts: line(s => s.pressure[H]), color: HOME }, { pts: line(s => s.pressure[A]), color: AWAY }],
+        { min: 0, max: Math.max(10, ...ms.map(m => Math.max(hist[m].pressure[H], hist[m].pressure[A]))) * 1.1 });
+  chart($("chMom"), [{ pts: line(s => s.momentum), color: "#8fb8ff", fill: true }], { min: -100, max: 100, base: 0, ticks: [-100, 0, 100] });
+}
+
+function updateHud(s, frame) {
+  const H = teams.home.id, A = teams.away.id, h = s.stats[H], a = s.stats[A];
+  $("sc").textContent = `${s.score[H]} - ${s.score[A]}`;
+  const t = frame && frame.t != null ? frame.t : s.minute * 60;
+  $("clock").textContent = `${String(Math.floor(t / 60)).padStart(2, "0")}:${String(Math.floor(t % 60)).padStart(2, "0")}`;
+  $("cPoss").textContent = `${s.possession[H]}% – ${s.possession[A]}%`;
+  $("cXg").textContent = `${h.xg} – ${a.xg}`;
+  $("cPress").textContent = `${s.pressure[H]} – ${s.pressure[A]}`;
+  $("cMom").textContent = (s.momentum > 0 ? "◀ home " : s.momentum < 0 ? "away ▶ " : "") + Math.abs(s.momentum);
+  const rows = [["Shots", h.shots, a.shots], ["On target", h.on_target, a.on_target], ["xG", h.xg, a.xg], ["Pass accuracy %", h.pass_acc, a.pass_acc],
+                ["Tackles won", h.tackles_won, a.tackles_won], ["Pressures", h.pressures, a.pressures], ["Fouls", h.fouls, a.fouls]];
+  $("stats").innerHTML = rows.map(r => `<tr><td>${r[1]}</td><td class="k">${r[0]}</td><td>${r[2]}</td></tr>`).join("");
+}
+
+/* ---------------------------------------------------------------- live match stream */
+let es = null, ovCount = 0;
+$("stop").onclick = () => { if (es) es.close(); };
+$("go").onclick = () => {
+  if (es) es.close();
+  $("overlays").innerHTML = ""; hist = {}; cur = prev = null; ovCount = 0; $("ovn").textContent = "";
+  const q = new URLSearchParams({ home: tacticParam(selVal($("mHome"))), away: tacticParam(selVal($("mAway"))), mode: $("mMode").value,
+                                  lang: $("mLang").value, speed: $("mSpeed").value, seed: parseInt($("mSeed").value) || 42 });
+  es = new EventSource("/api/match/stream?" + q);
+  es.addEventListener("meta", e => {
+    teams = JSON.parse(e.data);
+    ids = [...teams.home.players, ...teams.away.players].map(p => p.id);
+    $("hn").textContent = teams.home.name; $("an").textContent = teams.away.name;
+    $("ht").textContent = `${teams.home.tactic.name}`; $("at").textContent = `${teams.away.tactic.name}`;
+  });
+  es.addEventListener("end", () => es.close());
+  es.onmessage = e => {
+    const d = JSON.parse(e.data), now = performance.now();
+    if (d.frame && d.frame.p) {
+      prev = lerpState(now) || null; cur = d.frame; tStart = now; dur = clamp(now - lastArr, 30, 400); lastArr = now;
+    }
+    hist[d.snapshot.minute] = d.snapshot;
+    updateHud(d.snapshot, d.frame);
+    if (d.snapshot.minute !== (redrawCharts.last || -1) || d.events.some(x => x.type === "goal")) { redrawCharts.last = d.snapshot.minute; redrawCharts(); }
+    for (const o of d.overlays) {
+      const el = document.createElement("div"); el.className = "overlay " + o.kind;
+      el.innerHTML = `<h4>${o.at_minute}' ${o.headline}</h4><p>${o.body}</p><p class="why">Why it matters: ${o.explanation}</p>`;
+      $("overlays").prepend(el); $("ovn").textContent = ++ovCount;
+    }
+  };
+};
+
+/* ---------------------------------------------------------------- tactic editor */
+let ed = null;
+const SLIDERS = [["line_height", "Line height", "deep", "high"], ["pressing", "Pressing", "passive", "intense"], ["width", "Width", "narrow", "wide"],
+                 ["tempo", "Tempo", "slow", "fast"], ["directness", "Directness", "short", "direct"]];
+
+function newEd(t) { ed = JSON.parse(JSON.stringify(t)); renderEd(); }
+function renderEd() {
+  $("tName").value = ed.name;
+  $("tForm").innerHTML = Object.keys(catalog.formations).map(f => `<option ${f === ed.formation ? "selected" : ""}>${f}</option>`).join("");
+  const slots = catalog.formations[ed.formation];
+  $("slots").innerHTML = slots.map((s, i) => {
+    const opts = Object.entries(catalog.roles).filter(([, r]) => r.line === s.line)
+      .map(([k, r]) => `<option value="${k}" ${k === ed.roles[i] ? "selected" : ""}>${r.label}</option>`).join("");
+    return `<div class="slot"><b>${s.slot}</b><select data-i="${i}">${opts}</select></div>`;
+  }).join("");
+  $("slots").querySelectorAll("select").forEach(s => s.onchange = () => { ed.roles[+s.dataset.i] = s.value; drawPreview(); });
+  $("sliders").innerHTML = SLIDERS.map(([k, l, a, b]) =>
+    `<div class="sl"><span>${l}<br><small>${a} ↔ ${b}</small></span><input type="range" min="0" max="1" step="0.05" data-k="${k}" value="${ed[k]}"><span>${Math.round(ed[k] * 100)}</span></div>`).join("");
+  $("sliders").querySelectorAll("input").forEach(r => r.oninput = () => { ed[r.dataset.k] = +r.value; r.parentNode.lastChild.textContent = Math.round(r.value * 100); drawPreview(); });
+  drawPreview();
+}
+function drawPreview() {
+  if (!ed || !catalog) return;
+  const c = $("prev"), ctx = c.getContext("2d"), W = c.width, H = c.height;
+  drawPitchLines(ctx, W, H);
+  const slots = catalog.formations[ed.formation];
+  $("pvName").textContent = `${ed.formation} · line ${Math.round(ed.line_height * 100)} · width ${Math.round(ed.width * 100)}`;
+  slots.forEach((s, i) => {
+    const r = catalog.roles[ed.roles[i]] || {}, role = { ax: r.ax || 0, spread: r.spread || 1 };
+    let x = s.x + role.ax * (0.6 + 0.4 * ed.tempo) + (ed.line_height - 0.5) * 10, y = 50 + (s.y - 50) * (0.8 + 0.35 * ed.width) * role.spread;
+    if (s.line === "GK") x = 5 + (ed.line_height - 0.5) * 8;
+    x = clamp(x, 3, 97) / 100 * W; y = clamp(y, 3, 97) / 100 * H;
+    ctx.beginPath(); ctx.arc(x, y, 24, 0, 7); ctx.fillStyle = HOME; ctx.fill(); ctx.lineWidth = 2; ctx.strokeStyle = "#12001f"; ctx.stroke();
+    ctx.fillStyle = "#12001f"; ctx.font = "bold 19px system-ui"; ctx.textAlign = "center"; ctx.textBaseline = "middle"; ctx.fillText(s.slot, x, y);
+    ctx.fillStyle = "#fff"; ctx.font = "17px system-ui"; ctx.fillText(r.label || "", x, y + 40);
+  });
+}
+
+$("tForm").onchange = () => { ed.formation = $("tForm").value; ed.roles = catalog.formations[ed.formation].map(s => s.default_role); renderEd(); };
+$("tName").oninput = () => ed.name = $("tName").value;
+$("tPreset").onchange = () => { const t = allTactics()[selVal($("tPreset"))]; if (t) newEd(t); };
+$("tSave").onclick = () => {
+  ed.name = ($("tName").value || "My tactic").trim();
+  if (isPreset(ed.name)) ed.name += " (mine)";
+  mine[ed.name] = JSON.parse(JSON.stringify(ed)); localStorage.setItem("gp_tactics", JSON.stringify(mine));
+  refreshSelectors(); $("tName").value = ed.name; alert(`Saved "${ed.name}". Pick it in Live match or Tactic Lab.`);
+};
+$("tDel").onclick = () => { if (mine[ed.name]) { delete mine[ed.name]; localStorage.setItem("gp_tactics", JSON.stringify(mine)); refreshSelectors(); } };
+$("tExport").onclick = () => { $("tJson").style.display = "block"; $("tJson").value = JSON.stringify(ed, null, 1); $("tJson").select(); };
+$("tImport").onclick = () => {
+  const box = $("tJson");
+  if (box.style.display === "none") { box.style.display = "block"; box.value = ""; box.placeholder = "Paste tactic JSON here, then click Import again"; return; }
+  try { newEd(JSON.parse(box.value)); box.style.display = "none"; } catch (e) { alert("Invalid JSON"); }
+};
+
+/* ---------------------------------------------------------------- lab */
+$("lN").oninput = () => $("lnv").textContent = $("lN").value;
+$("lTactic").onchange = renderOpps;
+$("lAll").onclick = e => { e.preventDefault(); document.querySelectorAll("#lOpps input").forEach(i => i.checked = true); };
+$("lRun").onclick = async () => {
+  const name = selVal($("lTactic")), opps = [...document.querySelectorAll("#lOpps input:checked")].map(i => i.value);
+  if (!opps.length) return alert("Select at least one opponent.");
+  const all = allTactics(), btn = $("lRun"); btn.disabled = true; btn.textContent = "Simulating…";
+  $("lOut").innerHTML = `<div class="card" style="color:var(--mute)">Simulating ${opps.length * $("lN").value} matches…</div>`;
+  try {
+    const r = await fetch("/api/lab/run", { method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ tactic: all[name], opponents: opps.map(o => all[o]), n: +$("lN").value }) });
+    renderLab(await r.json());
+  } catch (e) { $("lOut").innerHTML = `<div class="card">Error: ${e}</div>`; }
+  btn.disabled = false; btn.textContent = "Run simulations";
+};
+function renderLab(r) {
+  const verdict = r.robustness >= 62 ? "Solid" : r.robustness >= 45 ? "Fragile in places" : "Doesn't hold up";
+  $("lOut").innerHTML = `
+    <div class="card" style="display:flex;gap:28px;align-items:center;flex-wrap:wrap">
+      <div class="big">${r.robustness}<small> / 100 robustness</small></div>
+      <div><b>${verdict}</b><br><span style="color:var(--mute);font-size:13px">${r.overall_ppg} points per game over ${r.matchups.length * r.n} matches.<br>Best vs <b style="color:var(--accent)">${r.best}</b> · worst vs <b style="color:var(--pink)">${r.worst}</b></span></div>
+    </div>
+    <div class="card" style="margin-top:12px"><h3>Matchups</h3>
+      <table class="lab"><tr><th>Opponent</th><th>W / D / L</th><th>Pts/g</th><th>Goals</th><th>xG</th><th>Poss.</th><th>PPDA</th></tr>
+      ${r.matchups.map(m => `<tr><td>${m.opponent}</td>
+        <td><div class="wdl"><i class="w" style="width:${m.win}%"></i><i class="d" style="width:${m.draw}%"></i><i class="l" style="width:${m.loss}%"></i></div><small style="color:var(--mute)">${m.win}% · ${m.draw}% · ${m.loss}%</small></td>
+        <td><b>${m.ppg}</b></td><td>${m.gf} – ${m.ga}</td><td>${m.xgf} – ${m.xga}</td><td>${m.possession}%</td><td>${m.ppda}</td></tr>`).join("")}</table></div>
+    <div class="card" style="margin-top:12px"><h3>Diagnosis</h3>${r.insights.map(i => `<div class="ins ${i.level}">${i.text}</div>`).join("")}</div>`;
+}
+
+/* ---------------------------------------------------------------- boot */
+fetch("/api/catalog").then(r => r.json()).then(c => {
+  catalog = c; refreshSelectors(); newEd(c.presets.find(t => t.name === "Balanced 4-3-3"));
+  if (location.hash === "#tactics") document.querySelector("[data-tab=tactics]").click();
+  if (location.hash === "#lab") { document.querySelector("[data-tab=lab]").click(); $("lRun").click(); }
+  if (location.hash === "#demo") { $("mSpeed").value = "150"; $("go").click(); }
+});
 </script>
 </body>
 </html>
