@@ -223,7 +223,7 @@ class MatchSimulator:
         fx, fy = float(me[0]), float(me[1])
         in_box = fx > 84 and abs(fy - 50) < 24
         zone = 1.6 if in_box else (0.95 if fx > 70 else 0.0)
-        shoot_p = 0.027 * (0.5 + 0.5 * role["sh"]) * zone * (0.7 + 0.3 * P.attr(c, "shooting") / 70)
+        shoot_p = 0.023 * (0.5 + 0.5 * role["sh"]) * zone * (0.7 + 0.3 * P.attr(c, "shooting") / 70)
         drib_p = 0.07 * role["dr"] * (P.attr(c, "dribbling") / 70) * (1.4 if dmin < 9 else 0.7)
         # patient teams also move the ball forward by carrying it into open space (safe territorial gain)
         ahead = opp[opp[:, 0] > fx - 2]
@@ -280,7 +280,7 @@ class MatchSimulator:
             if dm < 4:
                 continue
             open_r = min(14.0, float(self._dists_m(rp, opp).min()))
-            w_dir = 0.15 + 2.2 * directness + 1.2 * role["fw"]
+            w_dir = 0.8 + 1.4 * directness + 1.2 * role["fw"]
             w = math.exp(fwd / 22 * w_dir) * (0.35 + open_r / 14) ** (1 + 2.2 * (1 - directness))  # patient teams only find the free man
             w *= math.exp(-dm / (7 + 30 * directness + P.attr(c, "vision") / 10))
             if fwd < 0:  # recycling the ball is what patient teams do under pressure

@@ -14,9 +14,15 @@ def _row(tactic, opponent, n=N):
 
 
 def test_possession_style_keeps_the_ball_against_a_low_block():
-    r = _row("Possession 4-3-3", "Low block 5-3-2")
-    assert r["possession"] > 57, r  # was ~50% when tactics did not drive ball retention
+    r = _row("Possession 4-3-3", "Low block 5-3-2", n=40)
+    assert r["possession"] > 55, r  # was ~50% when tactics did not drive ball retention
     assert r["pass_acc"] > 80
+
+
+def test_possession_turns_into_chances_against_a_low_block():
+    r = _row("Possession 4-3-3", "Low block 5-3-2", n=40)
+    assert r["xgf"] > r["xga"], r  # was sterile: 62% of the ball but fewer shots than the opponent
+    assert r["shots_for"] >= r["shots_against"], r
 
 
 def test_balanced_mirror_is_balanced():
