@@ -5,6 +5,15 @@ A tactical football lab and live match intelligence engine. Coaches design a for
 
 Built for the *Inside the Game: Developer Hackathon* (Microsoft x Premier League). All data is synthetic: clubs and players are fictional.
 
+## What a coach can do
+- Pick any of **75 formations** (or type your own shape), and give every player a role. Roles can be **described in plain
+  language** ("stay wide, beat his man, cross early") and are translated by AI.
+- Test **scenarios**: presets or free text ("red card for my centre-back at 30', then the opponent scores at 40'").
+- **Coach live**: change speed, pause, switch tactics or inject events while the match runs.
+- **What-if**: compare a tactic with and without a scenario over many matches (same seeds, so differences come from the change).
+
+See `docs/ROADMAP.md` for the vision, ideas (replaying real matches, scouting, set pieces...) and what the rules allow regarding video.
+
 ## Three modes
 1. **Live match**: 22 players move on a pitch in real time; possession, xG, pressing and momentum charts update live; agents write explained insights.
 2. **Tactics**: formation (4-3-3, 4-4-2, 4-2-3-1, 3-5-2, 5-3-2, 3-4-3), one role per player, five team instructions (line height, pressing, width, tempo, directness). Saved in the browser, exportable as JSON.
@@ -38,6 +47,8 @@ With `AZURE_OPENAI_*` set, narration and translation go through your Foundry dep
 |---|---|
 | `gamepulse/tactics.py` | Formations, roles, team instructions, presets |
 | `gamepulse/simulator/` | Seeded tactical simulator: player positions, pressing, passing, dribbles, shots, fatigue |
+| `gamepulse/scenario.py` | Scenario rules (red card, goal, injury, fatigue, tactic change), presets, validation |
+| `gamepulse/agents/interpreter.py` | AI interpreter: free-text roles and scenarios to validated parameters (LLM or keyword fallback) |
 | `gamepulse/lab.py` | Tactic Lab: headless batch simulation, aggregation, insights |
 | `gamepulse/engine/state.py` | Live stats, momentum, control-vs-chaos, key-moment detection |
 | `gamepulse/agents/pipeline.py` | Agents (Explainer, Narrator, Persona) and the orchestrator |

@@ -4,7 +4,7 @@ from __future__ import annotations
 import random
 
 from ..models import Player, Team
-from ..tactics import FORMATIONS, ROLES, Tactic, resolve_tactic
+from ..tactics import Tactic, get_formation, resolve_tactic
 
 _NAMES = {
     "RVR": ["Tomas Reyes", "Callum Frost", "Idris Okoye", "Marek Dolan", "Jules Varga",
@@ -37,7 +37,7 @@ def build_team(tid: str, tactic, seed: int = 0, quality: float = 1.0) -> Team:
     name, short = _TEAM_INFO.get(tid, (tid, tid))
     rng = random.Random(f"{tid}-{seed}")
     team = Team(id=tid, name=name, short=short, tactic=tactic)
-    for i, (slot, x, y, line, _) in enumerate(FORMATIONS[tactic.formation]):
+    for i, (slot, x, y, line, _) in enumerate(get_formation(tactic.formation)):
         role = tactic.roles[i]
         attrs = dict(_BASE[line])
         for k, v in _ROLE_BONUS.get(role, {}).items():

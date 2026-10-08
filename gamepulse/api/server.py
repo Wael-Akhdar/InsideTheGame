@@ -1,18 +1,23 @@
 """FastAPI server: live match stream (SSE), tactic catalog and the Tactic Lab."""
 from __future__ import annotations
 
+import asyncio
 import json
 from pathlib import Path
 from typing import Any, Optional
 
-from fastapi import Body, FastAPI, Query
+from fastapi import Body, FastAPI, HTTPException, Query
 from fastapi.concurrency import run_in_threadpool
 from fastapi.responses import FileResponse, StreamingResponse
 
+from ..agents.interpreter import interpret_role, interpret_scenario
 from ..agents.pipeline import Orchestrator, Viewer
-from ..lab import evaluate
+from ..lab import evaluate, what_if
+from ..scenario import PRESET_SCENARIOS, describe_rule, sanitize
 from ..simulator.match import MatchSimulator
-from ..tactics import PRESETS, describe_catalog, resolve_tactic
+from ..tactics import PRESETS, describe_catalog, get_formation, resolve_tactic
+
+SESSIONS: dict[str, dict[str, Any]] = {}  # live match sessions: speed / pause / queued coach commands
 
 app = FastAPI(title="GamePulse")
 WEB = Path(__file__).resolve().parents[2] / "web"
@@ -37,15 +42,47 @@ def index():
 
 @app.get("/api/catalog")
 def catalog():
-    return describe_catalog()
+    cat = describe_catalog()
+    cat["scenarios"] = {k: {**v, "explain": [describe_rule(r) for r in v["rules"]]} for k, v in PRESET_SCENARIOS.items()}
+    return cat
+
+
+@app.get("/api/formation/{name}")
+def formation(name: str):
+    slots = get_formation(name)
+    if slots is None:
+        raise HTTPException(400, "Not a playable formation: use 10 outfield players, 3-5 defenders, 1-4 forwards (e.g. 4-1-2-1-2).")
+    return [dict(slot=s[0], x=s[1], y=s[2], line=s[3], default_role=s[4]) for s in slots]
+
+
+@app.post("/api/ai/role")
+async def ai_role(body: dict = Body(...)):
+    """Coach describes what a player should do -> role parameters (LLM if configured, keywords otherwise)."""
+    return await run_in_threadpool(interpret_role, str(body.get("text", "")), str(body.get("line", "MF")))
+
+
+@app.post("/api/ai/scenario")
+async def ai_scenario(body: dict = Body(...)):
+    """Coach describes a situation to test -> validated scenario rules."""
+    return await run_in_threadpool(interpret_scenario, str(body.get("text", "")))
 
 
 @app.get("/api/match/stream")
 async def stream(seed: int = 42, speed: float = 60.0, mode: str = "casual", lang: str = "en",
-                 home: Optional[str] = None, away: Optional[str] = None,
-                 team: Optional[str] = None, player: Optional[str] = Query(None)):
+                 home: Optional[str] = None, away: Optional[str] = None, scenario: Optional[str] = None,
+                 sid: Optional[str] = None, team: Optional[str] = None, player: Optional[str] = Query(None)):
     speed = max(1.0, min(speed, 2000.0))
-    sim = MatchSimulator(seed=seed, home_tactic=_spec(home, "Possession 4-3-3"), away_tactic=_spec(away, "Counter-attack 4-4-2"))
+    scn = None
+    if scenario:
+        try:
+            scn = sanitize(json.loads(scenario))
+        except json.JSONDecodeError:
+            scn = None
+    sim = MatchSimulator(seed=seed, home_tactic=_spec(home, "Possession 4-3-3"), away_tactic=_spec(away, "Counter-attack 4-4-2"),
+                         scenario=scn)
+    sess = {"speed": speed, "paused": False, "queue": []}
+    if sid:
+        SESSIONS[sid] = sess
     orch = Orchestrator(sim.home, sim.away)
     viewer = Viewer(mode=mode if mode in ("casual", "analyst") else "casual", lang=lang if lang in ("en", "fr", "es", "ar") else "en",
                     favorite_team=team, focus_player=player)
@@ -57,14 +94,64 @@ async def stream(seed: int = 42, speed: float = 60.0, mode: str = "casual", lang
 
     async def gen():
         yield f"event: meta\ndata: {json.dumps({'home': team_meta(sim.home), 'away': team_meta(sim.away)})}\n\n"
-        async for tk in sim.stream(speed):
-            overlays = orch.process_tick(tk, viewer)
-            payload = {"frame": tk.frame, "events": [e.to_dict() for e in tk.events],
-                       "snapshot": orch.state.snapshot(), "overlays": [o.to_dict() for o in overlays]}
-            yield f"data: {json.dumps(payload)}\n\n"
-        yield "event: end\ndata: {}\n\n"
+        prev = 0.0
+        try:
+            for tk in sim.ticks():
+                while sess["paused"]:
+                    await asyncio.sleep(0.1)
+                wait = max(0.0, (tk.t - prev) / max(1.0, sess["speed"]))  # speed can change at any time
+                if wait:
+                    await asyncio.sleep(wait)
+                prev = max(prev, tk.t)
+                overlays = orch.process_tick(tk, viewer)
+                payload = {"frame": tk.frame, "events": [e.to_dict() for e in tk.events],
+                           "snapshot": orch.state.snapshot(), "overlays": [o.to_dict() for o in overlays]}
+                yield f"data: {json.dumps(payload)}\n\n"
+                while sess["queue"]:  # coach commands take effect before the next tick is simulated
+                    cmd = sess["queue"].pop(0)
+                    if cmd["type"] == "tactic":
+                        sim.set_tactic(sim.home.id if cmd["team"] == "home" else sim.away.id, cmd["spec"], announce=True)
+                    elif cmd["type"] == "scenario":
+                        sim.add_scenario(cmd["scenario"])
+            yield "event: end\ndata: {}\n\n"
+        finally:
+            SESSIONS.pop(sid or "", None)
 
     return StreamingResponse(gen(), media_type="text/event-stream")
+
+
+@app.post("/api/match/control")
+async def match_control(body: dict = Body(...)):
+    """Live coaching: change speed, pause/resume, switch tactics or inject a scenario while the match is running."""
+    sess = SESSIONS.get(str(body.get("sid", "")))
+    if sess is None:
+        raise HTTPException(404, "No running match for this session")
+    reply: dict[str, Any] = {"ok": True}
+    if "speed" in body:
+        sess["speed"] = max(1.0, min(float(body["speed"]), 2000.0))
+    if "paused" in body:
+        sess["paused"] = bool(body["paused"])
+    if body.get("tactic"):  # {"team": "home"|"away", "spec": <preset name | partial changes | full tactic>}
+        t = body["tactic"]
+        sess["queue"].append({"type": "tactic", "team": "away" if t.get("team") == "away" else "home", "spec": t.get("spec")})
+    text = body.get("scenario_text")
+    if text or body.get("scenario"):
+        scn = await run_in_threadpool(interpret_scenario, text) if text else sanitize(body["scenario"])
+        sess["queue"].append({"type": "scenario", "scenario": scn})
+        reply["scenario"] = scn
+    return reply
+
+
+@app.post("/api/lab/whatif")
+async def lab_whatif(body: dict = Body(...)):
+    """Same seeds with and without a scenario: {"tactic", "scenario" (obj or "text"), "opponents", "n"}."""
+    tactic = resolve_tactic(body.get("tactic"))
+    scn = interpret_scenario(body["text"]) if body.get("text") else sanitize(body.get("scenario"))
+    opponents = body.get("opponents") or [p for p in PRESETS.values() if p.name != tactic.name]
+    n = max(4, min(int(body.get("n", 20)), 60))
+    res = await run_in_threadpool(what_if, tactic, scn, opponents[:6], n)
+    res["explain"] = [describe_rule(r) for r in scn["rules"]]
+    return res
 
 
 @app.post("/api/lab/run")
@@ -73,4 +160,5 @@ async def lab_run(body: dict = Body(...)):
     tactic = resolve_tactic(body.get("tactic"))
     opponents = body.get("opponents") or [p for p in PRESETS.values() if p.name != tactic.name]
     n = max(4, min(int(body.get("n", 20)), 60))
-    return await run_in_threadpool(evaluate, tactic, opponents[:10], n)
+    scn = sanitize(body["scenario"]) if body.get("scenario") else None
+    return await run_in_threadpool(evaluate, tactic, opponents[:10], n, 1000, None, scn)

@@ -49,3 +49,54 @@ def test_pipeline_produces_explained_overlays():
     assert all(o.explanation and o.evidence for o in overlays)
     assert orch.state.score == sim.score
     assert abs(sum(orch.state.possession().values()) - 100) < 0.5
+
+
+# ----------------------------------------------------------------- coach features
+def test_all_formations_are_playable():
+    from gamepulse.tactics import all_formation_names, get_formation
+    names = all_formation_names()
+    assert len(names) >= 60 and "4-1-2-1-2" in names and "3-4-1-2" in names
+    for n in names:
+        slots = get_formation(n)
+        assert len(slots) == 11 and slots[0][0] == "GK", n
+    assert get_formation("9-9-9") is None and get_formation("4-4-3") is None
+
+
+def test_custom_role_is_clamped_and_used():
+    t = Tactic(formation="4-3-3", roles=["keeper", "c1"], custom_roles={"c1": {"label": "Overlapper", "ax": 999, "sh": -5}})
+    assert t.roles[1] == "c1" and t.custom_roles["c1"]["ax"] == 25 and t.custom_roles["c1"]["sh"] == 0
+    assert len(list(MatchSimulator(seed=1, home_tactic=t, record_frames=False).events())) > 300
+
+
+def test_role_and_scenario_interpreter_fallback():
+    from gamepulse.agents.interpreter import interpret_role, interpret_scenario
+    wide = interpret_role("stay wide and cross", "FW")
+    deep = interpret_role("stay back and protect the defence, simple passes", "DF")
+    assert wide["spread"] > deep["spread"] and deep["ax"] < wide["ax"]
+    scn = interpret_scenario("red card for the opponent at 55 and we are down 0-2")
+    kinds = {(r["action"]["type"], r["action"]["team"]) for r in scn["rules"]}
+    assert ("red_card", "away") in kinds and ("goal", "away") in kinds
+
+
+def test_scenario_rules_fire_and_are_sanitized():
+    from gamepulse.scenario import sanitize
+    scn = sanitize({"rules": [{"trigger": {"minute": 20}, "action": {"type": "red_card", "team": "home"}},
+                              {"trigger": {"minute": 30}, "action": {"type": "nuke", "team": "home"}}]})
+    assert len(scn["rules"]) == 1  # unknown action dropped
+    sim = MatchSimulator(seed=4, scenario=scn, record_frames=False)
+    cards = [e for e in sim.events() if e.type == "card"]
+    assert cards and cards[0].team == "RVR" and cards[0].minute >= 20
+
+
+def test_live_tactic_change_and_what_if():
+    from gamepulse.lab import what_if
+    sim = MatchSimulator(seed=9, record_frames=False)
+    evs = []
+    for i, tk in enumerate(sim.ticks()):
+        evs += tk.events
+        if i == 200:
+            sim.set_tactic("RVR", {"formation": "5-4-1", "pressing": 0.1}, announce=True)
+    assert sim.home.tactic.formation == "5-4-1" and any(e.type == "tactic_change" for e in evs)
+    r = what_if("Balanced 4-3-3", {"rules": [{"trigger": {"minute": 30}, "action": {"type": "red_card", "team": "home"}}]},
+                ["Balanced 4-3-3"], n=24)
+    assert r["delta_ppg"] < 0 and r["verdict"] in ("hurts", "makes little difference")

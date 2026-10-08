@@ -32,14 +32,14 @@
   #pitch { width:100%; aspect-ratio:105/68; display:block; border-radius:10px; background:#0b6b3a; }
   .legend { display:flex; gap:14px; font-size:12px; color:var(--mute); margin-top:6px; }
   .dot { display:inline-block; width:10px; height:10px; border-radius:50%; margin-right:5px; }
-  .charts { display:grid; gap:12px; } .chart canvas { width:100%; height:110px; display:block; }
+  .charts { display:grid; gap:12px; align-content:start; } .chart canvas { width:100%; height:110px; display:block; }
   table.st { width:100%; font-size:13px; border-collapse:collapse; } table.st td { padding:3px 0; } table.st td:first-child { text-align:right; width:30%; } table.st td:last-child { width:30%; } table.st td.k { text-align:center; color:var(--mute); }
   #overlays { display:flex; flex-direction:column; gap:8px; margin-top:12px; max-height:340px; overflow:auto; }
   .overlay { background:var(--panel2); border-left:4px solid var(--accent); padding:8px 12px; border-radius:8px; }
   .overlay.goal { border-color:var(--pink); } .overlay h4 { margin:0 0 3px; font-size:14px; } .overlay p { margin:3px 0; font-size:13px; } .why { color:var(--mute); font-size:12px !important; }
   /* tactics editor */
   .ed { display:grid; grid-template-columns:minmax(0,1fr) 380px; gap:16px; padding:16px 24px; } @media (max-width:1000px) { .ed { grid-template-columns:1fr; } }
-  .slots { display:grid; grid-template-columns:repeat(auto-fill,minmax(210px,1fr)); gap:8px; margin-top:10px; }
+  .slots { display:grid; grid-template-columns:repeat(auto-fill,minmax(240px,1fr)); gap:8px; margin-top:10px; }
   .slot { background:var(--panel2); border-radius:8px; padding:6px 8px; font-size:12px; display:flex; flex-direction:column; gap:3px; } .slot b { color:var(--accent); font-size:12px; }
   .sl { display:grid; grid-template-columns:110px 1fr 36px; align-items:center; gap:8px; font-size:13px; margin:8px 0; } .sl small { color:var(--mute); } input[type=range] { accent-color:var(--accent); width:100%; }
   #prev { width:100%; aspect-ratio:105/68; border-radius:10px; display:block; }
@@ -51,6 +51,10 @@
   .wdl { display:flex; height:10px; border-radius:5px; overflow:hidden; min-width:110px; } .wdl i { display:block; height:100%; } .w { background:var(--accent); } .d { background:#7d6a92; } .l { background:var(--pink); }
   .big { font-size:46px; font-weight:800; } .big small { font-size:14px; color:var(--mute); font-weight:400; }
   .ins { padding:8px 12px; border-radius:8px; margin:6px 0; font-size:13px; background:var(--panel2); border-left:4px solid var(--mute); } .ins.good { border-color:var(--accent); } .ins.warn { border-color:var(--warn); } .ins.bad { border-color:var(--pink); }
+  .chips { display:flex; gap:6px; flex-wrap:wrap; align-items:center; } .chip { background:var(--panel2); border:1px solid #4d2a6e; border-radius:14px; padding:3px 10px; font-size:12px; }
+  .slot input[type=text] { width:100%; font-size:12px; } .slot small { color:var(--mute); font-size:11px; line-height:1.3; } .slot .ai { display:flex; gap:4px; } .slot .ai button { padding:3px 8px; font-size:11px; }
+  .slot.cu { outline:1px solid var(--accent); }
+  .cmp td.up { color:var(--accent); } .cmp td.dn { color:var(--pink); }
   #tip { position:fixed; pointer-events:none; background:#000c; padding:4px 8px; border-radius:6px; font-size:12px; display:none; z-index:9; }
 </style>
 </head>
@@ -71,10 +75,17 @@
     <label class="f">Away tactic <select id="mAway"></select></label>
     <label class="f">View <select id="mMode"><option value="casual">Casual fan</option><option value="analyst">Analyst</option></select></label>
     <label class="f">Language <select id="mLang"><option value="en">English</option><option value="fr">Français</option><option value="es">Español</option><option value="ar">العربية</option></select></label>
-    <label class="f">Speed <select id="mSpeed"><option value="30">x30</option><option value="60" selected>x60</option><option value="150">x150</option><option value="400">x400</option></select></label>
+    <label class="f">Scenario <select id="mScn"></select></label>
+    <label class="f">Speed (live) <select id="mSpeed"><option value="10">x10</option><option value="30">x30</option><option value="60" selected>x60</option><option value="150">x150</option><option value="400">x400</option><option value="1000">x1000</option></select></label>
     <label class="f">Seed <input type="text" id="mSeed" value="42" size="5"></label>
     <button class="primary" id="go">Kick off</button>
+    <button class="ghost" id="pause">Pause</button>
     <button class="ghost" id="stop">Stop</button>
+  </div>
+  <div class="bar" style="padding-top:0;border-top:0">
+    <label class="f" style="flex:1;min-width:300px">Describe your own scenario (AI) <input type="text" id="mScnTxt" style="width:100%" placeholder="e.g. red card for my centre-back at 30', then the opponent scores at 40'"></label>
+    <button class="ghost" id="mScnBtn">Interpret</button>
+    <div id="mScnOut" class="chips"></div>
   </div>
   <div class="grid">
     <div>
@@ -86,6 +97,17 @@
         </div>
         <canvas id="pitch" width="1050" height="680"></canvas>
         <div class="legend"><span><i class="dot" style="background:#00ff85"></i>Home</span><span><i class="dot" style="background:#e90052"></i>Away</span><span>○ pressure zone around the ball carrier · hover a player for details</span></div>
+      </div>
+      <div class="card" style="margin-top:12px"><h3>Live coaching <b>change anything while the match runs</b></h3>
+        <div class="row" style="margin-top:0">
+          <label class="f">Team <select id="lcTeam"><option value="home">Home</option><option value="away">Away</option></select></label>
+          <label class="f">Formation <select id="lcForm"></select></label>
+          <label class="f">Switch to tactic <select id="lcTac"></select></label>
+          <button class="ghost" id="lcApply">Switch</button>
+        </div>
+        <div id="lcSliders"></div>
+        <div class="row"><input type="text" id="lcScn" style="flex:1;min-width:260px" placeholder="Tell the AI what happens now: 'red card for the opponent', 'we go all out attack'…"><button class="ghost" id="lcScnBtn">Inject</button></div>
+        <div id="lcOut" class="chips" style="margin-top:8px"></div>
       </div>
       <div class="card" style="margin-top:12px"><h3>Live insights <b id="ovn"></b></h3><div id="overlays"></div></div>
     </div>
@@ -107,8 +129,11 @@
         <label class="f">Start from <select id="tPreset"></select></label>
         <label class="f">Name <input type="text" id="tName" size="22"></label>
         <label class="f">Formation <select id="tForm"></select></label>
+        <label class="f">or any shape <input type="text" id="tFormCustom" size="11" placeholder="4-1-2-1-2"></label>
+        <button class="ghost" id="tFormUse">Use</button>
       </div>
       <h3 style="margin-top:16px">Player roles</h3>
+      <p style="color:var(--mute);font-size:12px;margin:0">Pick a preset role, or <b>describe in your own words</b> what the player should do and let the AI translate it (e.g. “stay wide, beat his man, cross early, don't track back”).</p>
       <div class="slots" id="slots"></div>
       <h3 style="margin-top:18px">Team instructions</h3>
       <div id="sliders"></div>
@@ -134,6 +159,12 @@
       <select id="lTactic" style="width:100%"></select>
       <h3 style="margin-top:16px">Opponents <span><a href="#" id="lAll" style="color:var(--accent);font-size:11px">all</a></span></h3>
       <div id="lOpps"></div>
+      <h3 style="margin-top:16px">Scenario to test</h3>
+      <select id="lScn" style="width:100%"></select>
+      <input type="text" id="lScnTxt" style="width:100%;margin-top:6px" placeholder="or describe it: 'we go 0-2 down, then press high from 60'">
+      <button class="ghost" id="lScnBtn" style="margin-top:6px">Interpret</button>
+      <div id="lScnOut" class="chips" style="margin-top:6px"></div>
+      <label class="opp" style="margin-top:10px"><input type="checkbox" id="lCompare" checked> Compare with / without (what-if)</label>
       <h3 style="margin-top:16px">Matches per opponent <b id="lnv">20</b></h3>
       <input type="range" id="lN" min="8" max="40" step="4" value="20">
       <button class="primary" id="lRun" style="width:100%;margin-top:14px">Run simulations</button>
@@ -149,6 +180,7 @@
 const $ = id => document.getElementById(id);
 const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
 const HOME = "#00ff85", AWAY = "#e90052";
+const post = (url, body) => fetch(url, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) }).then(r => r.json());
 let catalog = null;
 let mine = {};  // saved tactics
 try { mine = JSON.parse(localStorage.getItem("gp_tactics") || "{}"); } catch (e) {}
@@ -164,29 +196,57 @@ document.querySelectorAll("nav button").forEach(b => b.onclick = () => {
 const allTactics = () => Object.fromEntries([...catalog.presets.map(t => [t.name, t]), ...Object.entries(mine)]);
 const isPreset = name => catalog.presets.some(t => t.name === name);
 const tacticParam = name => isPreset(name) ? name : JSON.stringify(mine[name]);
-
-function fillSelect(sel, selected) {
-  const names = Object.keys(allTactics());
-  sel.innerHTML = names.map(n => `<option ${n === selected ? "selected" : ""}>${n}${isPreset(n) ? "" : " ★"}</option>`).join("");
-}
 const selVal = sel => sel.value.replace(/ ★$/, "");
 
+function fillSelect(sel, selected) {
+  sel.innerHTML = Object.keys(allTactics()).map(n => `<option ${n === selected ? "selected" : ""}>${n}${isPreset(n) ? "" : " ★"}</option>`).join("");
+}
+function formOptions(selected) {  // every playable shape, grouped by number of defenders
+  const groups = {};
+  Object.keys(catalog.formations).forEach(n => (groups[n.split("-")[0]] ||= []).push(n));
+  return Object.entries(groups).map(([d, ns]) => `<optgroup label="${d} at the back">${ns.map(n => `<option ${n === selected ? "selected" : ""}>${n}</option>`).join("")}</optgroup>`).join("");
+}
 function refreshSelectors() {
   fillSelect($("mHome"), selVal($("mHome")) || "Possession 4-3-3");
   fillSelect($("mAway"), selVal($("mAway")) || "Counter-attack 4-4-2");
   fillSelect($("lTactic"), selVal($("lTactic")) || "Balanced 4-3-3");
+  fillSelect($("lcTac"), "");
   fillSelect($("tPreset"), "");
   $("tPreset").insertAdjacentHTML("afterbegin", "<option value=''>— choose —</option>");
   $("tPreset").value = "";
   renderOpps();
 }
-
 function renderOpps() {
   const me = selVal($("lTactic"));
   const prev = new Set([...document.querySelectorAll("#lOpps input:checked")].map(i => i.value));
   $("lOpps").innerHTML = Object.keys(allTactics()).filter(n => n !== me).map(n =>
     `<label class="opp"><input type="checkbox" value="${n}" ${prev.size === 0 || prev.has(n) ? "checked" : ""}>${n}${isPreset(n) ? "" : " ★"}</label>`).join("");
 }
+
+/* ---------------------------------------------------------------- scenarios */
+let mScn = null, lScn = null;  // scenarios described in free text
+function fillScenarioSelect(sel) {
+  sel.innerHTML = "<option value=''>No scenario (open match)</option>" + Object.keys(catalog.scenarios).map(n => `<option>${n}</option>`).join("") + "<option value='__custom'>Custom (described below)</option>";
+}
+const chips = (el, list) => el.innerHTML = list.map(x => `<span class="chip">${x}</span>`).join("");
+function currentScenario(selId, custom) {
+  const v = $(selId).value;
+  const sc = v === "__custom" ? custom : v ? catalog.scenarios[v] : null;
+  return sc && sc.rules && sc.rules.length ? { name: sc.name, rules: sc.rules } : null;
+}
+async function describeScenario(txtId, outId, selId) {
+  const text = $(txtId).value.trim(); if (!text) return null;
+  chips($(outId), ["Interpreting…"]);
+  const scn = await post("/api/ai/scenario", { text });
+  $(selId).value = "__custom";
+  chips($(outId), scn.rules.length ? [...scn.explain, `(${scn.source === "llm" ? "understood by AI" : "keyword parser: connect Azure OpenAI for free-form text"})`]
+                                   : ["No event found in this sentence. Try: 'red card for the opponent at 55', 'we go 0-2 down'."]);
+  return scn;
+}
+$("mScnBtn").onclick = async () => { mScn = await describeScenario("mScnTxt", "mScnOut", "mScn"); };
+$("lScnBtn").onclick = async () => { lScn = await describeScenario("lScnTxt", "lScnOut", "lScn"); };
+$("mScn").onchange = () => { const v = $("mScn").value; chips($("mScnOut"), v === "__custom" ? (mScn ? mScn.explain : []) : v ? catalog.scenarios[v].explain : []); };
+$("lScn").onchange = () => { const v = $("lScn").value; chips($("lScnOut"), v === "__custom" ? (lScn ? lScn.explain : []) : v ? catalog.scenarios[v].explain : []); };
 
 /* ---------------------------------------------------------------- pitch drawing */
 function drawPitchLines(ctx, W, H) {
@@ -207,7 +267,7 @@ function drawPitchLines(ctx, W, H) {
 
 /* live pitch state */
 const pc = $("pitch"), pctx = pc.getContext("2d");
-let teams = null, names = {}, ids = [];
+let teams = null, ids = [];
 let cur = null, prev = null, tStart = 0, dur = 100, lastArr = 0, shown = null;
 
 function lerpState(now) {
@@ -252,7 +312,8 @@ pc.onmousemove = e => {
   shown.p.forEach((q, i) => { const d = Math.hypot((q[0] - mx) * 1.05, (q[1] - my) * 0.68) / 0.7; if (d < bd) { bd = d; best = i; } });
   if (best < 0) { tip.style.display = "none"; return; }
   const t = best < 11 ? teams.home : teams.away, p = t.players[best % 11];
-  tip.innerHTML = `<b>#${p.number} ${p.name}</b><br>${p.slot} · ${catalog.roles[p.role]?.label || p.role}`;
+  const role = (t.tactic.custom_roles || {})[p.role] || catalog.roles[p.role] || {};
+  tip.innerHTML = `<b>#${p.number} ${p.name}</b><br>${p.slot} · ${role.label || p.role}`;
   tip.style.left = e.clientX + 14 + "px"; tip.style.top = e.clientY + 10 + "px"; tip.style.display = "block";
 };
 pc.onmouseleave = () => $("tip").style.display = "none";
@@ -303,30 +364,37 @@ function updateHud(s, frame) {
   $("stats").innerHTML = rows.map(r => `<tr><td>${r[1]}</td><td class="k">${r[0]}</td><td>${r[2]}</td></tr>`).join("");
 }
 
-/* ---------------------------------------------------------------- live match stream */
-let es = null, ovCount = 0;
-$("stop").onclick = () => { if (es) es.close(); };
+/* ---------------------------------------------------------------- live match stream + live control */
+let es = null, ovCount = 0, curSid = null, paused = false, curMinute = 0;
+const control = async body => { if (!es || !curSid) return null; try { return await post("/api/match/control", { sid: curSid, ...body }); } catch (e) { return null; } };
+
+$("stop").onclick = () => { if (es) es.close(); es = null; };
+$("pause").onclick = () => { paused = !paused; $("pause").textContent = paused ? "Resume" : "Pause"; control({ paused }); };
+$("mSpeed").onchange = () => control({ speed: +$("mSpeed").value });
+
 $("go").onclick = () => {
   if (es) es.close();
-  $("overlays").innerHTML = ""; hist = {}; cur = prev = null; ovCount = 0; $("ovn").textContent = "";
+  $("overlays").innerHTML = ""; hist = {}; cur = prev = null; ovCount = 0; $("ovn").textContent = ""; paused = false; $("pause").textContent = "Pause"; $("lcOut").innerHTML = "";
+  curSid = Math.random().toString(36).slice(2);
   const q = new URLSearchParams({ home: tacticParam(selVal($("mHome"))), away: tacticParam(selVal($("mAway"))), mode: $("mMode").value,
-                                  lang: $("mLang").value, speed: $("mSpeed").value, seed: parseInt($("mSeed").value) || 42 });
+                                  lang: $("mLang").value, speed: $("mSpeed").value, seed: parseInt($("mSeed").value) || 42, sid: curSid });
+  const sc = currentScenario("mScn", mScn); if (sc) q.set("scenario", JSON.stringify(sc));
   es = new EventSource("/api/match/stream?" + q);
   es.addEventListener("meta", e => {
     teams = JSON.parse(e.data);
     ids = [...teams.home.players, ...teams.away.players].map(p => p.id);
     $("hn").textContent = teams.home.name; $("an").textContent = teams.away.name;
     $("ht").textContent = `${teams.home.tactic.name}`; $("at").textContent = `${teams.away.tactic.name}`;
+    liveTac = { home: { ...teams.home.tactic }, away: { ...teams.away.tactic } }; buildLiveCoach();
   });
-  es.addEventListener("end", () => es.close());
+  es.addEventListener("end", () => { es.close(); es = null; });
   es.onmessage = e => {
     const d = JSON.parse(e.data), now = performance.now();
-    if (d.frame && d.frame.p) {
-      prev = lerpState(now) || null; cur = d.frame; tStart = now; dur = clamp(now - lastArr, 30, 400); lastArr = now;
-    }
+    if (d.frame && d.frame.p) { prev = lerpState(now) || null; cur = d.frame; tStart = now; dur = clamp(now - lastArr, 30, 400); lastArr = now; }
+    curMinute = d.snapshot.minute;
     hist[d.snapshot.minute] = d.snapshot;
     updateHud(d.snapshot, d.frame);
-    if (d.snapshot.minute !== (redrawCharts.last || -1) || d.events.some(x => x.type === "goal")) { redrawCharts.last = d.snapshot.minute; redrawCharts(); }
+    if (d.snapshot.minute !== (redrawCharts.last ?? -1) || d.events.some(x => x.type === "goal")) { redrawCharts.last = d.snapshot.minute; redrawCharts(); }
     for (const o of d.overlays) {
       const el = document.createElement("div"); el.className = "overlay " + o.kind;
       el.innerHTML = `<h4>${o.at_minute}' ${o.headline}</h4><p>${o.body}</p><p class="why">Why it matters: ${o.explanation}</p>`;
@@ -335,22 +403,64 @@ $("go").onclick = () => {
   };
 };
 
-/* ---------------------------------------------------------------- tactic editor */
-let ed = null;
+/* live coaching: tactic sliders, formation, switch tactic, free-text scenario injection */
+let liveTac = { home: null, away: null };
 const SLIDERS = [["line_height", "Line height", "deep", "high"], ["pressing", "Pressing", "passive", "intense"], ["width", "Width", "narrow", "wide"],
                  ["tempo", "Tempo", "slow", "fast"], ["directness", "Directness", "short", "direct"]];
+function buildLiveCoach() {
+  const side = $("lcTeam").value, t = liveTac[side]; if (!t) return;
+  $("lcForm").innerHTML = formOptions(t.formation);
+  $("lcSliders").innerHTML = SLIDERS.map(([k, l, a, b]) =>
+    `<div class="sl"><span>${l}<br><small>${a} ↔ ${b}</small></span><input type="range" min="0" max="1" step="0.05" data-k="${k}" value="${t[k]}"><span>${Math.round(t[k] * 100)}</span></div>`).join("");
+  $("lcSliders").querySelectorAll("input").forEach(r => {
+    r.oninput = () => r.parentNode.lastChild.textContent = Math.round(r.value * 100);
+    r.onchange = () => { liveTac[side][r.dataset.k] = +r.value; applyLive({ [r.dataset.k]: +r.value }, `${r.dataset.k.replace("_", " ")} → ${Math.round(r.value * 100)}`); };
+  });
+}
+async function applyLive(spec, label) {
+  const side = $("lcTeam").value, r = await control({ tactic: { team: side, spec } });
+  chips($("lcOut"), [r ? `${side === "home" ? "Home" : "Away"}: ${label} (applies at ${curMinute}')` : "No running match."]);
+}
+$("lcTeam").onchange = buildLiveCoach;
+$("lcForm").onchange = () => { liveTac[$("lcTeam").value].formation = $("lcForm").value; applyLive({ formation: $("lcForm").value }, `formation → ${$("lcForm").value}`); };
+$("lcApply").onclick = () => {
+  const name = selVal($("lcTac")), t = allTactics()[name];
+  liveTac[$("lcTeam").value] = { ...t }; buildLiveCoach();
+  applyLive(isPreset(name) ? name : t, `switch to ${name}`);
+};
+$("lcScnBtn").onclick = async () => {
+  const text = $("lcScn").value.trim(); if (!text) return;
+  const r = await control({ scenario_text: text, minute: curMinute });
+  if (!r) return chips($("lcOut"), ["No running match."]);
+  chips($("lcOut"), r.scenario.rules.length ? r.scenario.explain.map(x => x.replace(/^\d+'/, "now")) : ["I couldn't find an event in this sentence."]);
+  $("lcScn").value = "";
+};
 
-function newEd(t) { ed = JSON.parse(JSON.stringify(t)); renderEd(); }
+/* ---------------------------------------------------------------- tactic editor */
+let ed = null;
+function newEd(t) { ed = JSON.parse(JSON.stringify(t)); ed.custom_roles ||= {}; renderEd(); }
+const roleInfo = key => ed.custom_roles[key] || catalog.roles[key] || {};
+
 function renderEd() {
   $("tName").value = ed.name;
-  $("tForm").innerHTML = Object.keys(catalog.formations).map(f => `<option ${f === ed.formation ? "selected" : ""}>${f}</option>`).join("");
+  $("tForm").innerHTML = formOptions(ed.formation);
   const slots = catalog.formations[ed.formation];
   $("slots").innerHTML = slots.map((s, i) => {
+    const key = ed.roles[i], custom = !!ed.custom_roles[key];
     const opts = Object.entries(catalog.roles).filter(([, r]) => r.line === s.line)
-      .map(([k, r]) => `<option value="${k}" ${k === ed.roles[i] ? "selected" : ""}>${r.label}</option>`).join("");
-    return `<div class="slot"><b>${s.slot}</b><select data-i="${i}">${opts}</select></div>`;
+      .map(([k, r]) => `<option value="${k}" ${k === key ? "selected" : ""}>${r.label}</option>`).join("") +
+      (custom ? `<option value="${key}" selected>✎ ${ed.custom_roles[key].label}</option>` : "");
+    return `<div class="slot ${custom ? "cu" : ""}"><b>${s.slot}</b><select data-i="${i}">${opts}</select>
+      <div class="ai"><input type="text" data-d="${i}" placeholder="or describe what he does…" value="${custom ? (ed.custom_roles[key].text || "").replace(/"/g, "&quot;") : ""}"><button class="ghost" data-a="${i}">AI</button></div>
+      ${custom ? `<small>${ed.custom_roles[key].summary || ""}</small>` : ""}</div>`;
   }).join("");
-  $("slots").querySelectorAll("select").forEach(s => s.onchange = () => { ed.roles[+s.dataset.i] = s.value; drawPreview(); });
+  $("slots").querySelectorAll("select").forEach(s => s.onchange = () => { ed.roles[+s.dataset.i] = s.value; renderEd(); });
+  $("slots").querySelectorAll("button[data-a]").forEach(b => b.onclick = async () => {
+    const i = +b.dataset.a, text = $("slots").querySelector(`input[data-d="${i}"]`).value.trim(); if (!text) return;
+    b.textContent = "…";
+    const role = await post("/api/ai/role", { text, line: slots[i].line });
+    const key = "c" + i; ed.custom_roles[key] = role; ed.roles[i] = key; renderEd();
+  });
   $("sliders").innerHTML = SLIDERS.map(([k, l, a, b]) =>
     `<div class="sl"><span>${l}<br><small>${a} ↔ ${b}</small></span><input type="range" min="0" max="1" step="0.05" data-k="${k}" value="${ed[k]}"><span>${Math.round(ed[k] * 100)}</span></div>`).join("");
   $("sliders").querySelectorAll("input").forEach(r => r.oninput = () => { ed[r.dataset.k] = +r.value; r.parentNode.lastChild.textContent = Math.round(r.value * 100); drawPreview(); });
@@ -363,7 +473,7 @@ function drawPreview() {
   const slots = catalog.formations[ed.formation];
   $("pvName").textContent = `${ed.formation} · line ${Math.round(ed.line_height * 100)} · width ${Math.round(ed.width * 100)}`;
   slots.forEach((s, i) => {
-    const r = catalog.roles[ed.roles[i]] || {}, role = { ax: r.ax || 0, spread: r.spread || 1 };
+    const r = roleInfo(ed.roles[i]), role = { ax: r.ax || 0, spread: r.spread || 1 };
     let x = s.x + role.ax * (0.6 + 0.4 * ed.tempo) + (ed.line_height - 0.5) * 10, y = 50 + (s.y - 50) * (0.8 + 0.35 * ed.width) * role.spread;
     if (s.line === "GK") x = 5 + (ed.line_height - 0.5) * 8;
     x = clamp(x, 3, 97) / 100 * W; y = clamp(y, 3, 97) / 100 * H;
@@ -372,8 +482,14 @@ function drawPreview() {
     ctx.fillStyle = "#fff"; ctx.font = "17px system-ui"; ctx.fillText(r.label || "", x, y + 40);
   });
 }
-
-$("tForm").onchange = () => { ed.formation = $("tForm").value; ed.roles = catalog.formations[ed.formation].map(s => s.default_role); renderEd(); };
+function setFormation(f) { ed.formation = f; ed.roles = catalog.formations[f].map(s => s.default_role); ed.custom_roles = {}; renderEd(); }
+$("tForm").onchange = () => setFormation($("tForm").value);
+$("tFormUse").onclick = async () => {
+  const name = $("tFormCustom").value.trim(); if (!name) return;
+  const r = await fetch("/api/formation/" + encodeURIComponent(name));
+  if (!r.ok) return alert((await r.json()).detail);
+  catalog.formations[name] = await r.json(); setFormation(name);
+};
 $("tName").oninput = () => ed.name = $("tName").value;
 $("tPreset").onchange = () => { const t = allTactics()[selVal($("tPreset"))]; if (t) newEd(t); };
 $("tSave").onclick = () => {
@@ -387,7 +503,7 @@ $("tExport").onclick = () => { $("tJson").style.display = "block"; $("tJson").va
 $("tImport").onclick = () => {
   const box = $("tJson");
   if (box.style.display === "none") { box.style.display = "block"; box.value = ""; box.placeholder = "Paste tactic JSON here, then click Import again"; return; }
-  try { newEd(JSON.parse(box.value)); box.style.display = "none"; } catch (e) { alert("Invalid JSON"); }
+  try { const t = JSON.parse(box.value); if (!catalog.formations[t.formation]) { /* unknown shape: ask server */ } newEd(t); box.style.display = "none"; } catch (e) { alert("Invalid JSON"); }
 };
 
 /* ---------------------------------------------------------------- lab */
@@ -397,12 +513,14 @@ $("lAll").onclick = e => { e.preventDefault(); document.querySelectorAll("#lOpps
 $("lRun").onclick = async () => {
   const name = selVal($("lTactic")), opps = [...document.querySelectorAll("#lOpps input:checked")].map(i => i.value);
   if (!opps.length) return alert("Select at least one opponent.");
-  const all = allTactics(), btn = $("lRun"); btn.disabled = true; btn.textContent = "Simulating…";
-  $("lOut").innerHTML = `<div class="card" style="color:var(--mute)">Simulating ${opps.length * $("lN").value} matches…</div>`;
+  const all = allTactics(), btn = $("lRun"), scn = currentScenario("lScn", lScn), compare = scn && $("lCompare").checked;
+  btn.disabled = true; btn.textContent = "Simulating…";
+  const total = opps.length * $("lN").value * (compare ? 2 : 1);
+  $("lOut").innerHTML = `<div class="card" style="color:var(--mute)">Simulating ${total} matches…</div>`;
+  const body = { tactic: all[name], opponents: opps.map(o => all[o]), n: +$("lN").value, scenario: scn };
   try {
-    const r = await fetch("/api/lab/run", { method: "POST", headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ tactic: all[name], opponents: opps.map(o => all[o]), n: +$("lN").value }) });
-    renderLab(await r.json());
+    if (compare) renderWhatIf(await post("/api/lab/whatif", body));
+    else renderLab(await post("/api/lab/run", body));
   } catch (e) { $("lOut").innerHTML = `<div class="card">Error: ${e}</div>`; }
   btn.disabled = false; btn.textContent = "Run simulations";
 };
@@ -411,7 +529,7 @@ function renderLab(r) {
   $("lOut").innerHTML = `
     <div class="card" style="display:flex;gap:28px;align-items:center;flex-wrap:wrap">
       <div class="big">${r.robustness}<small> / 100 robustness</small></div>
-      <div><b>${verdict}</b><br><span style="color:var(--mute);font-size:13px">${r.overall_ppg} points per game over ${r.matchups.length * r.n} matches.<br>Best vs <b style="color:var(--accent)">${r.best}</b> · worst vs <b style="color:var(--pink)">${r.worst}</b></span></div>
+      <div><b>${verdict}</b>${r.scenario ? ` <span class="chip">scenario: ${r.scenario}</span>` : ""}<br><span style="color:var(--mute);font-size:13px">${r.overall_ppg} points per game over ${r.matchups.length * r.n} matches.<br>Best vs <b style="color:var(--accent)">${r.best}</b> · worst vs <b style="color:var(--pink)">${r.worst}</b></span></div>
     </div>
     <div class="card" style="margin-top:12px"><h3>Matchups</h3>
       <table class="lab"><tr><th>Opponent</th><th>W / D / L</th><th>Pts/g</th><th>Goals</th><th>xG</th><th>Poss.</th><th>PPDA</th></tr>
@@ -420,10 +538,27 @@ function renderLab(r) {
         <td><b>${m.ppg}</b></td><td>${m.gf} – ${m.ga}</td><td>${m.xgf} – ${m.xga}</td><td>${m.possession}%</td><td>${m.ppda}</td></tr>`).join("")}</table></div>
     <div class="card" style="margin-top:12px"><h3>Diagnosis</h3>${r.insights.map(i => `<div class="ins ${i.level}">${i.text}</div>`).join("")}</div>`;
 }
+function renderWhatIf(r) {
+  const cls = v => v > 0.05 ? "up" : v < -0.05 ? "dn" : "";
+  const sign = v => (v > 0 ? "+" : "") + v;
+  $("lOut").innerHTML = `
+    <div class="card" style="display:flex;gap:28px;align-items:center;flex-wrap:wrap">
+      <div class="big">${sign(r.delta_ppg)}<small> pts / game</small></div>
+      <div><b>This scenario ${r.verdict}</b><br><span style="color:var(--mute);font-size:13px">${r.baseline_ppg} → ${r.scenario_ppg} points per game · robustness ${r.robustness_before} → ${r.robustness_after}<br>Same seeds with and without it: the matches are identical until the first scripted action, so every difference after that comes from it.</span></div>
+    </div>
+    <div class="card" style="margin-top:12px"><h3>What was simulated</h3><div class="chips">${r.explain.map(x => `<span class="chip">${x}</span>`).join("")}</div></div>
+    <div class="card cmp" style="margin-top:12px"><h3>Before vs after, per opponent</h3>
+      <table class="lab"><tr><th>Opponent</th><th>Pts/g before → after</th><th>Goal diff</th><th>xG diff</th><th>Win %</th><th>Loss %</th></tr>
+      ${r.matchups.map(m => `<tr><td>${m.opponent}</td><td class="${cls(m.delta_ppg)}"><b>${m.ppg_before} → ${m.ppg_after}</b> (${sign(m.delta_ppg)})</td>
+        <td>${m.goal_diff_before} → ${m.goal_diff_after}</td><td>${m.xg_diff_before} → ${m.xg_diff_after}</td><td>${m.win_before} → ${m.win_after}</td><td>${m.loss_before} → ${m.loss_after}</td></tr>`).join("")}</table></div>`;
+}
 
 /* ---------------------------------------------------------------- boot */
 fetch("/api/catalog").then(r => r.json()).then(c => {
-  catalog = c; refreshSelectors(); newEd(c.presets.find(t => t.name === "Balanced 4-3-3"));
+  catalog = c; refreshSelectors();
+  fillScenarioSelect($("mScn")); fillScenarioSelect($("lScn"));
+  $("lcForm").innerHTML = formOptions("4-3-3");
+  newEd(c.presets.find(t => t.name === "Balanced 4-3-3"));
   if (location.hash === "#tactics") document.querySelector("[data-tab=tactics]").click();
   if (location.hash === "#lab") { document.querySelector("[data-tab=lab]").click(); $("lRun").click(); }
   if (location.hash === "#demo") { $("mSpeed").value = "150"; $("go").click(); }

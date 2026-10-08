@@ -6,7 +6,7 @@ from typing import Any, Optional
 
 EVENT_TYPES = (
     "kickoff", "pass", "shot", "dribble", "tackle", "possession_change",
-    "pressure", "foul", "card", "goal", "save", "halftime", "fulltime",
+    "pressure", "foul", "card", "goal", "save", "halftime", "fulltime", "tactic_change", "injury",
 )
 
 

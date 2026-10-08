@@ -18,7 +18,8 @@ from typing import AsyncIterator, Iterator, Optional
 import numpy as np
 
 from ..models import Event, Tick
-from ..tactics import FORMATIONS, ROLES
+from ..scenario import sanitize as sanitize_scenario
+from ..tactics import INSTRUCTIONS, Tactic, get_formation, resolve_tactic
 from .teams import build_team
 
 KX, KY = 1.05, 0.68  # units -> metres
@@ -36,8 +37,8 @@ class _Side:
         self.team = team
         self.id = team.id
         self.tac = team.tactic
-        slots = FORMATIONS[self.tac.formation]
-        roles = [ROLES[r] for r in self.tac.roles]
+        slots = get_formation(self.tac.formation)
+        roles = [self.tac.role(i) for i in range(11)]
         self.roles = roles
         self.base = np.array([[s[1], s[2]] for s in slots], float)
         self.gk = np.array([s[3] == "GK" for s in slots])
@@ -46,18 +47,21 @@ class _Side:
         self.spread = np.array([r["spread"] for r in roles], float)
         self.pr = np.array([r["pr"] for r in roles], float)
         self.pace = np.array([p.attrs["pace"] for p in team.players], float)
+        self.inj = np.ones(11)  # injured players move slower
+        self.extra_fat = 0.0  # scenario-driven fatigue
         self.pos = self.base.copy()
         self.active = np.ones(11, bool)
         self.fat = 1.0
         self.pressers: list[int] = []
 
     def attr(self, i: int, name: str) -> float:
-        return self.team.players[i].attrs[name]
+        return self.team.players[i].attrs[name] * (0.6 + 0.4 * self.inj[i])  # injured players perform worse
 
 
 class MatchSimulator:
     def __init__(self, seed: int = 42, home_tactic="Possession 4-3-3", away_tactic="Counter-attack 4-4-2",
-                 record_frames: bool = True, home_quality: float = 1.0, away_quality: float = 1.0):
+                 record_frames: bool = True, home_quality: float = 1.0, away_quality: float = 1.0,
+                 scenario=None):
         self.seed = seed
         self.rng = random.Random(seed)
         self.nprng = np.random.default_rng(seed)
@@ -66,6 +70,9 @@ class MatchSimulator:
         self.teams = {self.home.id: self.home, self.away.id: self.away}
         self.sides = {self.home.id: _Side(self.home), self.away.id: _Side(self.away)}
         self.record_frames = record_frames
+        self.rules: list[dict] = []
+        self._pending: list[tuple[str, dict]] = []  # live tactic changes to announce on the next tick
+        self.add_scenario(scenario)
         self.score = {self.home.id: 0, self.away.id: 0}
         self.poss_time = {self.home.id: 0.0, self.away.id: 0.0}
         self._eid = 0
@@ -91,6 +98,11 @@ class MatchSimulator:
     @staticmethod
     def _dists_m(p, others: np.ndarray) -> np.ndarray:
         return np.hypot((others[:, 0] - p[0]) * KX, (others[:, 1] - p[1]) * KY)
+
+    @staticmethod
+    def _numeric(P: _Side, D: _Side) -> int:
+        """Men advantage of the team in possession (negative when it plays with fewer players)."""
+        return int(P.active.sum() - D.active.sum())
 
     def _opp_view(self, D: _Side) -> np.ndarray:
         """Defender positions expressed in the possessing team's frame (inactive players pushed far away)."""
@@ -149,7 +161,7 @@ class MatchSimulator:
 
         vec = tgt - S.pos
         dist = np.hypot(vec[:, 0], vec[:, 1]) + 1e-9
-        max_step = 5.0 * (S.pace / 75.0) * S.fat * dt
+        max_step = 5.0 * (S.pace * S.inj / 75.0) * S.fat * dt
         frac = np.minimum(1.0, max_step / dist) * np.where(full, 1.0, 0.7)
         step = vec * frac[:, None] + self.nprng.normal(0, 0.25, (11, 2))
         step[~S.active] = 0
@@ -161,7 +173,7 @@ class MatchSimulator:
         P, D = self.sides[self.poss], self.sides[self._other(self.poss)]
         prog = min(1.0, t / 5400)
         for s in (P, D):  # high pressing and tempo burn stamina
-            s.fat = max(0.6, 1 - 0.38 * prog * (0.2 + 0.55 * s.tac.pressing + 0.25 * s.tac.tempo))
+            s.fat = max(0.5, 1 - 0.38 * prog * (0.2 + 0.55 * s.tac.pressing + 0.25 * s.tac.tempo) - s.extra_fat)
         self._move(P, True, dt)
         self._move(D, False, dt)
         c = self.c
@@ -225,7 +237,7 @@ class MatchSimulator:
     def _dribble(self, P: _Side, D: _Side, t: float, evs: list[Event], j: int, dmin: float):
         rng, c = self.rng, self.c
         me = P.pos[c]
-        ok = rng.random() < _clamp(0.58 + (P.attr(c, "dribbling") - D.attr(j, "tackling")) / 150 - (0.12 if dmin < 4 else 0), 0.2, 0.85)
+        ok = rng.random() < _clamp(0.58 + (P.attr(c, "dribbling") - D.attr(j, "tackling")) / 150 - (0.12 if dmin < 4 else 0) + 0.03 * self._numeric(P, D), 0.2, 0.85)
         if ok:
             fwd = rng.uniform(4, 9)
             end = (min(97.0, me[0] + fwd), _clamp(me[1] + rng.uniform(-4, 4), 2, 98))
@@ -265,7 +277,7 @@ class MatchSimulator:
         i, fwd, dm, open_r = rng.choices(cands, weights=weights)[0]
         p = (1.03 - 0.10 * (P.tac.tempo - 0.5) - 0.0038 * dm * (1.2 - P.attr(c, "vision") / 150) - 0.07 * min(pressure, 2.0)
              - 0.10 * (1 - open_r / 14) + (P.attr(c, "passing") - 70) / 250
-             - 0.08 * max(0.0, fwd) / 40 * (1 - max(0.0, role["sf"])))
+             - 0.08 * max(0.0, fwd) / 40 * (1 - max(0.0, role["sf"])) + 0.04 * self._numeric(P, D))
         ok = rng.random() < _clamp(p, 0.3, 0.97)
         rp = P.pos[i]
         ev = self._ev(t, "pass", P.id, player=P.team.players[c].id, x=float(me[0]), y=float(me[1]),
@@ -290,7 +302,7 @@ class MatchSimulator:
         angle = math.atan2(7.32 * (100 - me[0]) * KX, ((100 - me[0]) * KX) ** 2 + lateral ** 2 - 3.66 ** 2 + 1e-9)
         angle = angle if angle > 0 else angle + math.pi
         xg = 0.62 * math.exp(-dist / 9.5) * (0.35 + 0.65 * min(1.0, angle / 0.55)) * (1 - 0.18 * min(pressure, 2.0))
-        xg = _clamp(xg, 0.01, 0.8)
+        xg = _clamp(xg * (1 + 0.09 * self._numeric(P, D)), 0.01, 0.8)
         finishing = P.attr(c, "shooting") / 70
         keeper = D.attr(0, "keeping") / 75
         roll = rng.random()
@@ -314,6 +326,95 @@ class MatchSimulator:
             if outcome == "saved":
                 evs.append(self._ev(t, "save", D.id, player=D.team.players[0].id, x=5.0, y=50.0, meta={"shot_id": ev.id}))
             self._give_to_gk(D.id)
+
+    # ------------------------------------------------------------------ live changes and scenarios
+    def add_scenario(self, scenario) -> list[dict]:
+        """Queue scenario rules. Rules whose minute has already passed fire on the next tick."""
+        added = [dict(r, fired=False) for r in (sanitize_scenario(scenario)["rules"] if scenario else [])]
+        self.rules.extend(added)
+        return added
+
+    def set_tactic(self, tid: str, spec, announce: bool = False) -> Tactic:
+        """Change a team's tactic mid-match. `spec` is a preset name, a full tactic, or a partial dict of changes."""
+        old = self.sides[tid]
+        team = old.team
+        if isinstance(spec, dict):
+            merged = {**team.tactic.to_dict(), **spec}
+            if spec.get("formation") and spec["formation"] != team.tactic.formation and "roles" not in spec:
+                merged["roles"] = []  # new shape -> default roles
+            tac = Tactic.from_dict(merged)
+        else:
+            tac = resolve_tactic(spec)
+        team.tactic = tac
+        for i, (slot, _, _, line, _) in enumerate(get_formation(tac.formation)):
+            pl = team.players[i]
+            pl.slot, pl.position, pl.role = slot, line, tac.roles[i]
+        side = _Side(team)
+        side.pos, side.active, side.inj, side.extra_fat, side.fat = old.pos.copy(), old.active.copy(), old.inj, old.extra_fat, old.fat
+        self.sides[tid] = side
+        if announce:
+            keys = (*INSTRUCTIONS, "formation")
+            ch = {k: v for k, v in spec.items() if k in keys} if isinstance(spec, dict) else {}
+            self._pending.append((tid, ch or {k: getattr(tac, k) for k in keys}))
+        return tac
+
+    def _tid(self, who: str) -> str:
+        return self.home.id if who == "home" else self.away.id
+
+    def _pick_player(self, tid: str, slot) -> int | None:
+        side = self.sides[tid]
+        if slot:
+            for i, pl in enumerate(side.team.players):
+                if pl.slot == slot and side.active[i] and not side.gk[i]:
+                    return i
+        cand = [i for i in range(11) if side.active[i] and not side.gk[i]]
+        return self.rng.choice(cand) if cand else None
+
+    def _cond_ok(self, cond: dict) -> bool:
+        me, other = self._tid(cond["team"]), self._tid("away" if cond["team"] == "home" else "home")
+        diff = self.score[me] - self.score[other]
+        return diff <= cond.get("score_diff_lte", 99) and diff >= cond.get("score_diff_gte", -99)
+
+    def _apply_rules(self, t: float, evs: list[Event]):
+        for tid, ch in self._pending:
+            evs.append(self._ev(t, "tactic_change", tid, meta={"changes": ch, "tactic": self.teams[tid].tactic.name, "live": True}))
+        self._pending.clear()
+        for r in self.rules:
+            if r["fired"] or t < r["trigger"]["minute"] * 60:
+                continue
+            if "if" in r["trigger"] and not self._cond_ok(r["trigger"]["if"]):
+                continue
+            r["fired"] = True
+            a = r["action"]
+            tid = self._tid(a["team"])
+            note = {"scripted": True}
+            if a["type"] == "red_card":
+                i = self._pick_player(tid, a.get("player"))
+                if i is not None:
+                    self.sides[tid].active[i] = False
+                    evs.append(self._ev(t, "card", tid, player=self.teams[tid].players[i].id, outcome="red", meta=note))
+            elif a["type"] == "injury":
+                i = self._pick_player(tid, a.get("player"))
+                if i is not None:
+                    self.sides[tid].inj[i] = 0.5
+                    evs.append(self._ev(t, "injury", tid, player=self.teams[tid].players[i].id, meta=note))
+            elif a["type"] == "fatigue":
+                self.sides[tid].extra_fat = min(0.3, self.sides[tid].extra_fat + a.get("amount", 0.15))
+            elif a["type"] == "tactic_change":
+                tac = self.set_tactic(tid, a["changes"])
+                evs.append(self._ev(t, "tactic_change", tid, meta={"changes": a["changes"], "tactic": tac.name, **note}))
+            elif a["type"] == "goal":
+                P = self.sides[tid]
+                cand = [i for i in range(11) if P.active[i] and not P.gk[i]]
+                i = max(cand, key=lambda k: P.base[k, 0])
+                shooter = P.team.players[i].id
+                shot = self._ev(t, "shot", tid, player=shooter, x=float(P.pos[i, 0]), y=float(P.pos[i, 1]), end_x=100.0, end_y=50.0,
+                                outcome="goal", xg=0.4, speed_kmh=95.0, meta={"distance_m": 11.0, **note})
+                evs.append(shot)
+                self.score[tid] += 1
+                evs.append(self._ev(t, "goal", tid, player=shooter, x=float(P.pos[i, 0]), y=float(P.pos[i, 1]), xg=0.4,
+                                    meta={"score": dict(self.score), "assist_shot_id": shot.id, **note}))
+                self._kickoff(self._other(tid))
 
     # ------------------------------------------------------------------ output
     def _frame(self, t: float) -> dict:
@@ -345,6 +446,7 @@ class MatchSimulator:
             dt = (5.5 - 3.0 * tempo) * rng.uniform(0.8, 1.2)
             t += dt
             evs: list[Event] = []
+            self._apply_rules(t, evs)
             self._step(t, dt, evs)
             yield Tick(t, self._frame(t), evs)
         yield Tick(t, self._frame(t), [self._ev(t, "fulltime", self.poss)])

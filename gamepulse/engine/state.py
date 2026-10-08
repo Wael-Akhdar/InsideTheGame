@@ -109,6 +109,10 @@ class MatchState:
             st.fouls += 1
         elif ev.type == "possession_change" and st:
             st.possession_events += 1
+        elif ev.type == "tactic_change":
+            new.append(Moment("tactic_change", ev.minute, ev.team, None, 0.75, [ev.id], {"changes": ev.meta.get("changes", {})}))
+        elif ev.type == "injury":
+            new.append(Moment("injury", ev.minute, ev.team, ev.player, 0.6, [ev.id], {}))
         elif ev.type == "card" and ev.outcome == "red":
             new.append(Moment("red_card", ev.minute, ev.team, ev.player, 0.95, [ev.id], {}))
 

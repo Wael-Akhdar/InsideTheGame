@@ -5,17 +5,22 @@ import os
 from concurrent.futures import ProcessPoolExecutor
 from typing import Any
 
+from .scenario import mirror, sanitize
 from .simulator.match import MatchSimulator
 from .tactics import PRESETS, Tactic, resolve_tactic
 
 HOME, AWAY = "RVR", "NTH"
 
 
-def play_one(args: tuple[dict, dict, int, bool]) -> dict[str, Any]:
-    """Simulate one match headlessly. `mine_home` says which side the coach's tactic plays on."""
-    mine, other, seed, mine_home = args
+def play_one(args: tuple) -> dict[str, Any]:
+    """Simulate one match headlessly. `mine_home` says which side the coach's tactic plays on.
+    In a scenario, "home" always means the coach's team (mirrored when it plays away)."""
+    mine, other, seed, mine_home = args[:4]
+    scn = args[4] if len(args) > 4 else None
     h, a = (mine, other) if mine_home else (other, mine)
-    sim = MatchSimulator(seed=seed, home_tactic=h, away_tactic=a, record_frames=False)
+    if scn and not mine_home:
+        scn = mirror(scn)
+    sim = MatchSimulator(seed=seed, home_tactic=h, away_tactic=a, record_frames=False, scenario=scn)
     me, op = (HOME, AWAY) if mine_home else (AWAY, HOME)
     m = {k: 0.0 for k in ("gf", "ga", "xgf", "xga", "shf", "sha", "pass_f", "pass_ok_f", "pass_a", "tackles_f", "press_f",
                           "fouls_f", "late_ga", "late_gf", "red_f")}
@@ -70,14 +75,17 @@ def _aggregate(name: str, rows: list[dict[str, float]]) -> dict[str, Any]:
 
 
 def evaluate(tactic: Any, opponents: list[Any] | None = None, n: int = 20, base_seed: int = 1000,
-             workers: int | None = None) -> dict[str, Any]:
+             workers: int | None = None, scenario: Any = None) -> dict[str, Any]:
     """Play `n` matches (half at home, half away) against each opponent and summarise."""
     mine: Tactic = resolve_tactic(tactic)
+    scn = sanitize(scenario) if scenario else None
+    if scn is not None and not scn["rules"]:
+        scn = None
     opps = [resolve_tactic(o) for o in (opponents or [p for p in PRESETS.values() if p.name != mine.name])]
     jobs, owners = [], []
     for oi, o in enumerate(opps):
         for k in range(n):
-            jobs.append((mine.to_dict(), o.to_dict(), base_seed + oi * 10_000 + k, k % 2 == 0))
+            jobs.append((mine.to_dict(), o.to_dict(), base_seed + oi * 10_000 + k, k % 2 == 0, scn))
             owners.append(oi)
     workers = workers or min(os.cpu_count() or 2, 8)
     if workers > 1 and len(jobs) > 8:
@@ -90,7 +98,7 @@ def evaluate(tactic: Any, opponents: list[Any] | None = None, n: int = 20, base_
     worst = min(per, key=lambda p: p["ppg"])
     best = max(per, key=lambda p: p["ppg"])
     return {
-        "tactic": mine.to_dict(), "n": n, "overall_ppg": overall_ppg,
+        "tactic": mine.to_dict(), "n": n, "scenario": scn["name"] if scn else None, "overall_ppg": overall_ppg,
         "robustness": round(100 * overall_ppg / 3),  # 0-100: share of the maximum points per game
         "worst": worst["opponent"], "best": best["opponent"], "matchups": per,
         "insights": insights(mine, per),
@@ -127,3 +135,23 @@ def insights(t: Tactic, per: list[dict[str, Any]]) -> list[dict[str, str]]:
     best = max(per, key=lambda p: p["ppg"])
     out.append({"level": "good", "text": f"Best matchup: {best['opponent']} ({best['ppg']} pts/game)."})
     return out
+
+
+def what_if(tactic: Any, scenario: Any, opponents: list[Any] | None = None, n: int = 20, base_seed: int = 1000) -> dict[str, Any]:
+    """Replay the same seeds with and without a scenario ("what if I had changed X at minute 60?").
+
+    A match is deterministic for a given seed, so baseline and what-if are identical until the first scripted
+    action fires: every difference afterwards is caused by the change."""
+    base = evaluate(tactic, opponents, n, base_seed)
+    alt = evaluate(tactic, opponents, n, base_seed, scenario=scenario)
+    rows = []
+    for b, a in zip(base["matchups"], alt["matchups"]):
+        rows.append({"opponent": b["opponent"], "ppg_before": b["ppg"], "ppg_after": a["ppg"], "delta_ppg": round(a["ppg"] - b["ppg"], 2),
+                     "goal_diff_before": round(b["gf"] - b["ga"], 2), "goal_diff_after": round(a["gf"] - a["ga"], 2),
+                     "xg_diff_before": round(b["xgf"] - b["xga"], 2), "xg_diff_after": round(a["xgf"] - a["xga"], 2),
+                     "win_before": b["win"], "win_after": a["win"], "loss_before": b["loss"], "loss_after": a["loss"]})
+    delta = round(alt["overall_ppg"] - base["overall_ppg"], 2)
+    verdict = ("helps" if delta > 0.12 else "hurts" if delta < -0.12 else "makes little difference")
+    return {"scenario": alt["scenario"], "n": n, "baseline_ppg": base["overall_ppg"], "scenario_ppg": alt["overall_ppg"],
+            "delta_ppg": delta, "verdict": verdict, "matchups": rows,
+            "robustness_before": base["robustness"], "robustness_after": alt["robustness"]}

@@ -82,6 +82,11 @@ class ExplainerAgent(Agent):
                     f"territory and pressure. Play is {cvc['control']:.0f}% controlled vs {cvc['chaos']:.0f}% turnovers.")
         if m.kind == "red_card":
             return f"{team} are down to ten men - expect a deeper block and fewer attacks from them."
+        if m.kind == "tactic_change":
+            ch = ", ".join(f"{k.replace('_', ' ')} {v if isinstance(v, str) else round(v * 100)}" for k, v in m.facts["changes"].items())
+            return f"{team} change their approach ({ch}). Watch the next minutes: shape, pressing and tempo will shift."
+        if m.kind == "injury":
+            return f"{team} lose a key player's mobility - expect gaps on that side and fewer high-intensity runs."
         return "A notable moment in the match."
 
 
@@ -94,6 +99,7 @@ class NarratorAgent(Agent):
         headline = {
             "goal": f"GOAL! {player} ({team})", "big_chance": f"Big chance for {player}!",
             "momentum_swing": f"{team} take control", "red_card": f"RED CARD - {player}",
+            "tactic_change": f"{team} switch tactics", "injury": f"{player} ({team}) is hurt",
         }.get(m.kind, "Key moment")
         facts = f"{m.kind} at minute {m.minute} by {player} ({team}). {why}"
         if m.player and v.mode == "analyst":

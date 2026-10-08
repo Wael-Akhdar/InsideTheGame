@@ -5,11 +5,12 @@ y from the team's left touchline (0) to right touchline (100).
 """
 from __future__ import annotations
 
+import re
 from dataclasses import asdict, dataclass, field
 from typing import Any
 
 # slot = (name, x, y, line, default_role)
-FORMATIONS: dict[str, list[tuple[str, float, float, str, str]]] = {
+_HANDMADE: dict[str, list[tuple[str, float, float, str, str]]] = {
     "4-3-3": [
         ("GK", 5, 50, "GK", "keeper"),
         ("LB", 26, 12, "DF", "fullback"), ("LCB", 22, 37, "DF", "ball_playing"),
@@ -83,6 +84,113 @@ ROLES: dict[str, dict[str, Any]] = {
 }
 
 INSTRUCTIONS = ("line_height", "pressing", "width", "tempo", "directness")
+ROLE_PARAMS = {"ax": (-20, 25), "dx": (-10, 10), "spread": (0.6, 1.4), "dr": (0.0, 2.0), "sh": (0.0, 2.0),
+               "fw": (-0.4, 0.6), "pr": (0.0, 2.0), "sf": (-0.2, 0.5)}
+
+
+# ----------------------------------------------------------------------------- formations
+_SPAN = {1: 0, 2: 34, 3: 64, 4: 80, 5: 88, 6: 90}
+_FW_ROLES = {1: ["poacher"], 2: ["poacher", "target_man"], 3: ["winger", "poacher", "inside_forward"],
+             4: ["winger", "poacher", "target_man", "inside_forward"]}
+
+
+def _ys(n: int) -> list[float]:
+    return [50.0] if n == 1 else [round(50 - _SPAN[n] / 2 + _SPAN[n] * i / (n - 1), 1) for i in range(n)]
+
+
+def parse_formation(name: str) -> list[int] | None:
+    """'4-2-3-1' -> [4, 2, 3, 1] if it is a playable shape (10 outfield players, 3-5 defenders, 1-4 forwards)."""
+    if not re.fullmatch(r"\d(-\d){1,4}", name or ""):
+        return None
+    parts = [int(x) for x in name.split("-")]
+    if sum(parts) != 10 or not 3 <= parts[0] <= 5 or not 1 <= parts[-1] <= 4 or min(parts) < 1 or max(parts) > 6:
+        return None
+    return parts
+
+
+def _generate(name: str, parts: list[int]) -> list[tuple[str, float, float, str, str]]:
+    slots: list[tuple[str, float, float, str, str]] = [("GK", 5, 50, "GK", "keeper")]
+    d, mids, f = parts[0], parts[1:-1], parts[-1]
+    # defenders
+    dn = {3: ["LCB", "CB", "RCB"], 4: ["LB", "LCB", "RCB", "RB"], 5: ["LWB", "LCB", "CB", "RCB", "RWB"]}[d]
+    cb_roles = ["ball_playing", "stopper", "cover", "stopper"]
+    ci = 0
+    for nm, y in zip(dn, _ys(d)):
+        wide = nm in ("LB", "RB", "LWB", "RWB")
+        role = ("wingback" if d == 5 else "fullback") if wide else cb_roles[ci % len(cb_roles)]
+        ci += 0 if wide else 1
+        x = 34 if (wide and d == 5) else 26 if wide else (20 if d % 2 and nm == "CB" else 22)
+        slots.append((nm, x, y, "DF", role))
+    # midfield lines
+    tags = {1: ["CM"], 2: ["DM", "AM"], 3: ["DM", "CM", "AM"]}[len(mids)]
+    xs = {1: [48], 2: [40, 62], 3: [38, 52, 64]}[len(mids)]
+    for n, tag, x0 in zip(mids, tags, xs):
+        names = {1: [tag], 2: ["L" + tag, "R" + tag], 3: ["L" + tag, tag, "R" + tag],
+                 4: ["LM", "L" + tag, "R" + tag, "RM"], 5: ["LM", "L" + tag, tag, "R" + tag, "RM"],
+                 6: ["LM", "L" + tag, "L" + tag + "2", "R" + tag + "2", "R" + tag, "RM"]}[n]
+        for k, (nm, y) in enumerate(zip(names, _ys(n))):
+            wide = nm in ("LM", "RM") or (tag == "AM" and n >= 3 and k in (0, n - 1))
+            if wide and tag == "AM":
+                slots.append((nm, x0, y, "FW", "winger" if k == 0 else "inside_forward"))
+            elif wide:
+                slots.append((nm, x0 + 4, y, "MF", "wide_midfielder"))
+            else:
+                if tag == "DM":
+                    role = "anchor" if (n == 1 or k == 0) else "box_to_box"
+                elif tag == "AM":
+                    role = "playmaker" if k == 0 else "shadow_striker"
+                else:
+                    centre = abs(k - (n - 1) / 2) < 0.6
+                    role = ("playmaker" if len(mids) == 1 and n >= 3 and centre else "anchor" if centre and n == 5
+                            else "box_to_box")
+                slots.append((nm, x0, y, "MF", role))
+    # forwards
+    fn = {1: ["ST"], 2: ["ST1", "ST2"], 3: ["LW", "ST", "RW"], 4: ["LW", "LST", "RST", "RW"]}[f]
+    fx = {1: [80], 2: [76, 76], 3: [74, 80, 74], 4: [72, 78, 78, 72]}[f]
+    for nm, y, x, r in zip(fn, _ys(f), fx, _FW_ROLES[f]):
+        slots.append((nm, x, y, "FW", r))
+    return slots
+
+
+_CACHE: dict[str, list] = {}
+
+
+def get_formation(name: str) -> list[tuple[str, float, float, str, str]] | None:
+    """Hand-tuned shapes first, otherwise any playable 'd-m-f' pattern is generated on the fly."""
+    if name in _HANDMADE:
+        return _HANDMADE[name]
+    if name in _CACHE:
+        return _CACHE[name]
+    parts = parse_formation(name)
+    if parts is None:
+        return None
+    _CACHE[name] = _generate(name, parts)
+    return _CACHE[name]
+
+
+def all_formation_names() -> list[str]:
+    """Every playable shape: 3-5 defenders, 1-4 forwards, up to three midfield lines."""
+    names = set(_HANDMADE)
+
+    def splits(total: int, parts: int):
+        if parts == 1:
+            if 1 <= total <= 5:
+                yield [total]
+            return
+        for a in range(1, min(5, total - parts + 1) + 1):
+            for rest in splits(total - a, parts - 1):
+                yield [a] + rest
+
+    for d in (3, 4, 5):
+        for f in (1, 2, 3, 4):
+            m = 10 - d - f
+            for k in (1, 2, 3):
+                for mids in splits(m, k) if m >= k else []:
+                    names.add("-".join(map(str, [d, *mids, f])))
+    return sorted((n for n in names if get_formation(n)), key=lambda n: ([int(x) for x in n.split("-")], n))
+
+
+FORMATIONS = _HANDMADE  # kept for backwards compatibility; use get_formation()
 
 
 def _clamp01(v: Any, default: float = 0.5) -> float:
@@ -92,25 +200,43 @@ def _clamp01(v: Any, default: float = 0.5) -> float:
         return default
 
 
+def sanitize_role(params: dict[str, Any], label: str = "Custom role", text: str = "") -> dict[str, Any]:
+    """Clamp a (possibly AI-written) role definition to the ranges the simulator understands."""
+    out: dict[str, Any] = {"label": str(label)[:40] or "Custom role", "text": str(text)[:300], "custom": True}
+    mid = {"ax": 4.0, "dx": 0.0, "spread": 1.0, "dr": 1.0, "sh": 0.6, "fw": 0.1, "pr": 1.0, "sf": 0.1}
+    for k, (lo, hi) in ROLE_PARAMS.items():
+        try:
+            v = float(params.get(k, mid[k]))
+        except (TypeError, ValueError):
+            v = mid[k]
+        out[k] = round(max(lo, min(hi, v)), 2)
+    return out
+
+
 @dataclass
 class Tactic:
     name: str = "Custom"
     formation: str = "4-3-3"
-    roles: list[str] = field(default_factory=list)  # one role per formation slot
+    roles: list[str] = field(default_factory=list)  # one role per formation slot (preset key or custom key)
     line_height: float = 0.5  # how high the defensive line / block sits
     pressing: float = 0.5     # pressing intensity (also costs stamina)
     width: float = 0.5        # how wide the team stretches
     tempo: float = 0.5        # speed of play (more actions per minute)
     directness: float = 0.5   # short build-up (0) vs direct / vertical play (1)
+    custom_roles: dict[str, dict[str, Any]] = field(default_factory=dict)  # coach-described roles
 
     def __post_init__(self):
-        if self.formation not in FORMATIONS:
+        if get_formation(self.formation) is None:
             self.formation = "4-4-2"
-        slots = FORMATIONS[self.formation]
+        slots = get_formation(self.formation)
+        self.custom_roles = {str(k): sanitize_role(v, v.get("label", "Custom role"), v.get("text", ""))
+                             for k, v in (self.custom_roles or {}).items() if isinstance(v, dict)}
         roles = list(self.roles)[: len(slots)]
         for i, slot in enumerate(slots):
             role = roles[i] if i < len(roles) else slot[4]
-            if role not in ROLES or ROLES[role]["line"] != slot[3]:
+            if role in self.custom_roles:
+                pass  # any slot may use a coach-described role
+            elif role not in ROLES or ROLES[role]["line"] != slot[3]:
                 role = slot[4]  # invalid or wrong line -> slot default
             if i < len(roles):
                 roles[i] = role
@@ -121,9 +247,13 @@ class Tactic:
             setattr(self, k, _clamp01(getattr(self, k)))
         self.name = str(self.name)[:40] or "Custom"
 
+    def role(self, i: int) -> dict[str, Any]:
+        key = self.roles[i]
+        return self.custom_roles[key] if key in self.custom_roles else ROLES[key]
+
     @classmethod
     def from_dict(cls, d: dict[str, Any]) -> "Tactic":
-        allowed = {"name", "formation", "roles", *INSTRUCTIONS}
+        allowed = {"name", "formation", "roles", "custom_roles", *INSTRUCTIONS}
         return cls(**{k: v for k, v in d.items() if k in allowed})
 
     def to_dict(self) -> dict[str, Any]:
@@ -175,8 +305,8 @@ def describe_catalog() -> dict[str, Any]:
     """JSON-friendly catalog for the front-end tactic editor."""
     return {
         "formations": {
-            name: [dict(slot=s[0], x=s[1], y=s[2], line=s[3], default_role=s[4]) for s in slots]
-            for name, slots in FORMATIONS.items()
+            name: [dict(slot=s[0], x=s[1], y=s[2], line=s[3], default_role=s[4]) for s in get_formation(name)]
+            for name in all_formation_names()
         },
         "roles": {k: dict(line=v["line"], label=v["label"], ax=v["ax"], spread=v["spread"]) for k, v in ROLES.items()},
         "presets": [t.to_dict() for t in PRESETS.values()],

@@ -2,8 +2,10 @@
 otherwise returns None so agents fall back to deterministic templates (offline demo / tests)."""
 from __future__ import annotations
 
+import json
 import os
-from typing import Optional
+import re
+from typing import Any, Optional
 
 
 class LLM:
@@ -35,4 +37,15 @@ class LLM:
             return r.choices[0].message.content.strip()
         except Exception as exc:  # never break the live pipeline on an LLM hiccup
             print(f"[llm] fallback to templates: {exc}")
+            return None
+
+    def complete_json(self, system: str, user: str, max_tokens: int = 500) -> Optional[dict[str, Any]]:
+        """Ask for a JSON object. Returns None when the LLM is unavailable or answers garbage (callers then fall back)."""
+        text = self.complete(system + " Reply with a single JSON object and nothing else.", user, max_tokens)
+        if not text:
+            return None
+        m = re.search(r"\{.*\}", text, re.S)
+        try:
+            return json.loads(m.group(0)) if m else None
+        except json.JSONDecodeError:
             return None
