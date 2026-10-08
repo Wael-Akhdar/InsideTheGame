@@ -136,10 +136,15 @@ class MatchSimulator:
         lh = tac.line_height
         if has_ball:
             tx = S.base[:, 0] + 0.3 * (bx - 50) + S.ax * (0.6 + 0.4 * tac.tempo) + (lh - 0.5) * 10
+            support = 0.28 * (1 - tac.directness)  # short build-up: players close in on the ball to offer passing options
         else:
             tx = S.base[:, 0] + 0.3 * (bx - 50) + S.dx + (lh - 0.5) * 24
         tx[S.gk] = 5 + (lh - 0.5) * 8 + 0.08 * (bx - 50)
         ty = 50 + (S.base[:, 1] - 50) * (0.8 + 0.35 * tac.width) * S.spread + 0.2 * (by - 50)
+        if has_ball:
+            near = ~S.gk & (S.base[:, 0] < 68)  # forwards keep their shape: they are the targets of the build-up
+            tx = np.where(near, tx + (bx - tx) * support * 0.4, tx)
+            ty = np.where(near, ty + (by - ty) * support, ty)
         tgt = np.stack([np.clip(tx, 3, 97), np.clip(ty, 3, 97)], axis=1)
 
         S.pressers = []
@@ -217,12 +222,22 @@ class MatchSimulator:
         # ---- choose action
         fx, fy = float(me[0]), float(me[1])
         in_box = fx > 84 and abs(fy - 50) < 24
-        zone = 1.6 if in_box else (0.6 if fx > 70 else 0.0)
-        shoot_p = 0.026 * (0.5 + 0.5 * role["sh"]) * zone * (0.7 + 0.3 * P.attr(c, "shooting") / 70)
+        zone = 1.6 if in_box else (0.95 if fx > 70 else 0.0)
+        shoot_p = 0.027 * (0.5 + 0.5 * role["sh"]) * zone * (0.7 + 0.3 * P.attr(c, "shooting") / 70)
         drib_p = 0.07 * role["dr"] * (P.attr(c, "dribbling") / 70) * (1.4 if dmin < 9 else 0.7)
+        # patient teams also move the ball forward by carrying it into open space (safe territorial gain)
+        ahead = opp[opp[:, 0] > fx - 2]
+        space = float(self._dists_m(me, ahead).min()) if len(ahead) else 40.0
+        carry_p = (0.26 * (1 - P.tac.directness) + 0.03) * (1.0 if space > 6.5 else 0.0) * (0.0 if P.gk[c] or fx > 82 else 1.0)
         r = rng.random()
         if r < shoot_p:
             self._shoot(P, D, t, evs, pressure)
+        elif r < shoot_p + carry_p:
+            end = (min(97.0, fx + rng.uniform(5, 11)), _clamp(float(me[1]) + rng.uniform(-5, 5), 3, 97))
+            evs.append(self._ev(t, "dribble", P.id, player=P.team.players[c].id, x=fx, y=float(me[1]), end_x=end[0], end_y=end[1],
+                                outcome="success", meta={"carry": True}))
+            P.pos[c] = end
+            self.ball = self._glob(P, end)
         elif r < shoot_p + drib_p and not P.gk[c]:
             self._dribble(P, D, t, evs, j, dmin)
         else:
@@ -265,19 +280,26 @@ class MatchSimulator:
             if dm < 4:
                 continue
             open_r = min(14.0, float(self._dists_m(rp, opp).min()))
-            w_dir = 0.9 + 1.2 * directness + 1.2 * role["fw"]
-            w = math.exp(fwd / 22 * w_dir) * (0.35 + open_r / 14)
-            w *= math.exp(-dm / (14 + 22 * directness + P.attr(c, "vision") / 10))
+            w_dir = 0.15 + 2.2 * directness + 1.2 * role["fw"]
+            w = math.exp(fwd / 22 * w_dir) * (0.35 + open_r / 14) ** (1 + 2.2 * (1 - directness))  # patient teams only find the free man
+            w *= math.exp(-dm / (7 + 30 * directness + P.attr(c, "vision") / 10))
+            if fwd < 0:  # recycling the ball is what patient teams do under pressure
+                w *= 1 + 2.0 * (1 - directness) * max(0.0, min(pressure, 2.0) - 0.3)
             if fwd > 0:
                 w *= 1 - 0.5 * max(0.0, role["sf"])
             cands.append((i, fwd, dm, open_r))
             weights.append(w)
         if not cands:
             return
+        # direct teams (and anyone under pressure) hit long balls: big territorial gain, but they are often lost
+        if rng.random() < 0.03 + 0.30 * directness + 0.06 * min(pressure, 2.0) * directness:
+            longs = [(k, w) for k, w in zip(cands, weights) if k[1] > 12 and k[2] >= 25]
+            if longs:
+                cands, weights = [k for k, _ in longs], [w for _, w in longs]
         i, fwd, dm, open_r = rng.choices(cands, weights=weights)[0]
-        p = (1.03 - 0.10 * (P.tac.tempo - 0.5) - 0.0038 * dm * (1.2 - P.attr(c, "vision") / 150) - 0.07 * min(pressure, 2.0)
-             - 0.10 * (1 - open_r / 14) + (P.attr(c, "passing") - 70) / 250
-             - 0.08 * max(0.0, fwd) / 40 * (1 - max(0.0, role["sf"])) + 0.04 * self._numeric(P, D))
+        p = (1.19 - 0.10 * (P.tac.tempo - 0.5) - 0.0078 * dm * (1.2 - P.attr(c, "vision") / 150) - 0.11 * min(pressure * (0.6 + 0.8 * D.tac.pressing), 2.0)
+             - 0.17 * (1 - open_r / 14) + (P.attr(c, "passing") - 70) / 250
+             - 0.15 * max(0.0, fwd) / 40 * (1 - max(0.0, role["sf"])) + 0.04 * self._numeric(P, D))
         ok = rng.random() < _clamp(p, 0.3, 0.97)
         rp = P.pos[i]
         ev = self._ev(t, "pass", P.id, player=P.team.players[c].id, x=float(me[0]), y=float(me[1]),
@@ -301,7 +323,8 @@ class MatchSimulator:
         lateral = abs(me[1] - 50) * KY
         angle = math.atan2(7.32 * (100 - me[0]) * KX, ((100 - me[0]) * KX) ** 2 + lateral ** 2 - 3.66 ** 2 + 1e-9)
         angle = angle if angle > 0 else angle + math.pi
-        xg = 0.62 * math.exp(-dist / 9.5) * (0.35 + 0.65 * min(1.0, angle / 0.55)) * (1 - 0.18 * min(pressure, 2.0))
+        xg = 0.90 * math.exp(-dist / 9.5) * (0.35 + 0.65 * min(1.0, angle / 0.55)) * (1 - 0.18 * min(pressure, 2.0))
+        xg = xg * (1 + 0.5 * (0.5 - P.tac.directness) * 0.6)  # patient build-up finds better shots, direct play takes what it gets
         xg = _clamp(xg * (1 + 0.09 * self._numeric(P, D)), 0.01, 0.8)
         finishing = P.attr(c, "shooting") / 70
         keeper = D.attr(0, "keeping") / 75
