@@ -14,6 +14,7 @@ A model that ignores the ball (a fixed formation shape) is the baseline: the mod
 from __future__ import annotations
 
 import argparse
+import json
 import statistics as st
 from dataclasses import dataclass
 from typing import Optional
@@ -74,20 +75,39 @@ def _side(formation: str, line_height: float = 0.5, width: float = 0.5) -> _Side
     return _SIDES[key]
 
 
+def _shape_stats(pts_m: np.ndarray, ball_m: np.ndarray) -> tuple[float, float, float, float, float]:
+    """Depth, width, mean distance to the centroid, ball to its 3 nearest outfield players, centroid to ball (metres)."""
+    c = pts_m.mean(0)
+    to_ball = np.hypot(*(pts_m - ball_m).T)
+    return (float(np.ptp(pts_m[:, 0])), float(np.ptp(pts_m[:, 1])), float(np.hypot(*(pts_m - c).T).mean()),
+            float(np.sort(to_ball)[:3].mean()), float(np.hypot(*(c - ball_m))))
+
+
 def frame_errors(track: TeamTrack, params: dict, line_height: float = 0.5, width: float = 0.5, use_ball: bool = True) -> dict[str, float]:
-    """Mean distance (m) between real and predicted positions, in and out of possession."""
+    """Placement error (m) between real and predicted positions, plus how well the team SHAPE matches on average.
+
+    Placement error alone rewards shrinking every prediction towards the ball (a safe average), so the model is also judged on
+    team depth, width and compactness: |mean predicted - mean real| over the frames of each phase."""
     S = _side(track.formation, line_height, width)
     err = {True: [], False: []}
+    shape = {True: ([], []), False: ([], [])}  # per phase: (real stats, predicted stats)
     for pts, b, has in zip(track.real, track.ball, track.has_ball):
-        if len(pts) < 8:
+        if len(pts) < 11:
             continue
         bx, by = (b[0], b[1]) if use_ball else (50.0, 50.0)
         pred = shape_targets(S, bool(has), float(bx), float(by), params)
         cost = np.hypot(*((pts[:, None, :] - pred[None, :, :]) * KXY).transpose(2, 0, 1))
         r, c = linear_sum_assignment(cost)
         err[bool(has)].append(float(cost[r, c].mean()))
+        out = c != 0  # slot 0 is the goalkeeper
+        shape[bool(has)][0].append(_shape_stats(pts[r[out]] * KXY, np.array([bx, by]) * KXY))
+        shape[bool(has)][1].append(_shape_stats(pred[c[out]] * KXY, np.array([bx, by]) * KXY))
+    gaps = []
+    for ph in (True, False):
+        if shape[ph][0]:
+            gaps += list(np.abs(np.mean(shape[ph][0], axis=0) - np.mean(shape[ph][1], axis=0)))
     return {"in": float(np.mean(err[True])) if err[True] else float("nan"), "out": float(np.mean(err[False])) if err[False] else float("nan"),
-            "all": float(np.mean(err[True] + err[False]))}
+            "all": float(np.mean(err[True] + err[False])), "shape_gap": float(np.mean(gaps)) if gaps else float("nan")}
 
 
 def evaluate(tracks: list[TeamTrack], params: dict, use_ball: bool = True, fit_instructions: bool = False) -> dict[str, float]:
@@ -99,29 +119,60 @@ def evaluate(tracks: list[TeamTrack], params: dict, use_ball: bool = True, fit_i
             res.append(frame_errors(t, params, best[0], best[1], use_ball))
         else:
             res.append(frame_errors(t, params, use_ball=use_ball))
-    return {k: float(np.nanmean([r[k] for r in res])) for k in ("in", "out", "all")}
+    return {k: float(np.nanmean([r[k] for r in res])) for k in ("in", "out", "all", "shape_gap")}
 
 
-def fit(train: list[TeamTrack], start: Optional[dict] = None) -> dict:
-    """Fit the shape parameters by minimising the mean error on the training teams (Powell, bounded by clipping)."""
+FIXED = {"lh_in", "lh_out", "width_gain", "support"}  # coach-facing instructions keep their meaning: not fitted
+
+
+def _bounds(name: str) -> tuple[float, float]:
+    if name.startswith(("kx_", "ky_")):
+        return 0.2, 1.4
+    if name.startswith(("follow_", "gy_")):
+        return 0.0, 1.0
+    if name.startswith("off_"):
+        return -15.0, 15.0
+    return {"gk_base": (2.0, 30.0), "gk_ball": (0.0, 0.8), "ax_scale": (0.0, 2.0), "width_base": (0.5, 1.3)}[name]
+
+
+def fit(train: list[TeamTrack], start: Optional[dict] = None, maxiter: int = 25) -> dict:
+    """Fit the shape parameters by minimising the mean placement error on the training teams (L-BFGS-B, bounded)."""
     from scipy.optimize import minimize
 
-    names = ["ball_shift_x", "ball_shift_y", "kx_in", "ky_in", "kx_out", "ky_out", "lh_in", "lh_out", "width_base", "width_gain", "support",
-             "gk_base", "gk_ball", "ax_scale", "off_df", "off_mf", "off_fw"]
     base = dict(start or SHAPE)
-    lo = np.array([0.0, 0.0, 0.2, 0.3, 0.2, 0.3, 0.0, 0.0, 0.5, 0.0, 0.0, 2.0, 0.0, 0.0, -20.0, -20.0, -20.0])
-    hi = np.array([1.0, 1.0, 1.2, 1.4, 1.2, 1.4, 30.0, 40.0, 1.3, 0.8, 0.6, 30.0, 0.8, 2.0, 20.0, 20.0, 20.0])
+    names = [n for n in base if n not in FIXED]
+    lo, hi = zip(*(_bounds(n) for n in names))
 
     def objective(v):
         p = dict(base)
-        p.update({n: float(x) for n, x in zip(names, np.clip(v, lo, hi))})
-        return evaluate(train, p)["all"]
+        p.update({n: float(x) for n, x in zip(names, v)})
+        r = evaluate(train, p)
+        return r["all"] + r["shape_gap"]  # placement error and shape fidelity count the same
 
-    x0 = np.array([base[n] for n in names])
-    r = minimize(objective, x0, method="Powell", options={"maxiter": 4, "xtol": 1e-2, "ftol": 1e-3})
+    x0 = np.clip([base[n] for n in names], lo, hi)
+    r = minimize(objective, x0, method="L-BFGS-B", bounds=list(zip(lo, hi)), options={"maxiter": maxiter, "eps": 1e-2})
     out = dict(base)
-    out.update({n: round(float(x), 3) for n, x in zip(names, np.clip(r.x, lo, hi))})
+    out.update({n: round(float(x), 3) for n, x in zip(names, r.x)})
     return out
+
+
+def cross_validate(tracks: list[TeamTrack], folds: int = 3) -> tuple[float, float, dict]:
+    """Leave-matches-out: fit on the other matches, measure on the held-out ones. Returns (current, fitted, final fit on everything)."""
+    matches = sorted({t.match for t in tracks})
+    cur, fit_err, w = [], [], []
+    for f in range(folds):
+        held = set(matches[f::folds])
+        train = [t for t in tracks if t.match not in held]
+        test = [t for t in tracks if t.match in held]
+        if not train or not test:
+            continue
+        params = fit(train)
+        a, b = evaluate(test, SHAPE), evaluate(test, params)
+        cur.append(a["all"] + a["shape_gap"])
+        fit_err.append(b["all"] + b["shape_gap"])
+        w.append(len(test))
+        print(f"  fold {f + 1}: held-out {sorted(m[-6:] for m in held)}  placement {a['all']:.2f} -> {b['all']:.2f} m, shape gap {a['shape_gap']:.2f} -> {b['shape_gap']:.2f} m", flush=True)
+    return float(np.average(cur, weights=w)), float(np.average(fit_err, weights=w)), fit(tracks)
 
 
 # ---------------------------------------------------------------------------------------------------------------- outcomes
@@ -213,25 +264,23 @@ def main() -> None:
     if args.macro:
         macro_check()
         return
-    tracks = load_tracks()
+    tracks = load_tracks(step_frames=6 if args.fit else 3)
     matches = sorted({t.match for t in tracks})
     print(f"{len(matches)} real matches, {len(tracks)} teams, {sum(t.n_frames for t in tracks)} team-frames (formations: "
           f"{sorted({t.formation for t in tracks})})")
-    print(f"{'model':<44}{'in poss.':>10}{'out of poss.':>14}{'all':>8}   (mean error in metres)")
+    print(f"{'model':<44}{'in poss.':>10}{'out of poss.':>14}{'all':>8}{'shape gap':>11}   (metres)")
     for label, kw in (("fixed formation shape (ignores the ball)", dict(use_ball=False)), ("ball-aware shape, default instructions", {}),
                       ("ball-aware shape, best line height and width", dict(fit_instructions=True))):
         r = evaluate(tracks, SHAPE, **kw)
-        print(f"{label:<44}{r['in']:>10.2f}{r['out']:>14.2f}{r['all']:>8.2f}")
+        print(f"{label:<44}{r['in']:>10.2f}{r['out']:>14.2f}{r['all']:>8.2f}{r['shape_gap']:>11.2f}")
     if args.fit and len(matches) >= 3:
-        test_m = set(matches[-max(1, len(matches) // 3):])
-        train = [t for t in tracks if t.match not in test_m]
-        test = [t for t in tracks if t.match in test_m]
-        fitted = fit(train)
-        print(f"\nfitted on {len(train)} teams of {len(matches) - len(test_m)} matches, tested on {len(test)} teams of {len(test_m)} unseen matches:")
-        for label, p in (("current parameters", SHAPE), ("fitted parameters", fitted)):
-            r = evaluate(test, p)
-            print(f"{label:<44}{r['in']:>10.2f}{r['out']:>14.2f}{r['all']:>8.2f}")
-        print("fitted parameters:", {k: fitted[k] for k in sorted(fitted)})
+        print("\ncross-validation (each fold: fit on the other matches, test on unseen ones):")
+        cur, fitted_err, final = cross_validate(tracks)
+        print(f"held-out objective (placement error + shape gap): current {cur:.2f} m -> fitted {fitted_err:.2f} m")
+        print("final parameters fitted on all matches:")
+        print(json.dumps({k: final[k] for k in sorted(final)}, indent=1))
+        fin = evaluate(tracks, final)
+        print(f"final parameters on all matches (optimistic, not held out): placement {fin['all']:.2f} m, shape gap {fin['shape_gap']:.2f} m")
 
 
 if __name__ == "__main__":

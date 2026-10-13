@@ -11,12 +11,16 @@ x=0); frames sent to the UI use *global* coordinates (home attacks to the right)
 from __future__ import annotations
 
 import asyncio
+import json
 import math
 import random
 from typing import AsyncIterator, Iterator, Optional
 
+from pathlib import Path
+
 import numpy as np
 
+from ..xg import estimate_xg
 from ..models import Event, Tick
 from ..scenario import sanitize as sanitize_scenario
 from ..tactics import INSTRUCTIONS, Tactic, get_formation, resolve_tactic
@@ -30,10 +34,42 @@ def _clamp(v: float, lo: float, hi: float) -> float:
     return lo if v < lo else hi if v > hi else v
 
 
-# Parameters of the positioning model (team shape around the ball). Fitted on real tracking data: see gamepulse/validation.py.
-SHAPE = {"ball_shift_x": 0.3, "ball_shift_y": 0.2, "lh_in": 10.0, "lh_out": 24.0, "width_base": 0.8, "width_gain": 0.35,
-         "kx_in": 0.60, "ky_in": 0.92, "kx_out": 0.55, "ky_out": 0.70, "support": 0.28,
-         "gk_base": 5.0, "gk_ball": 0.08, "ax_scale": 1.0, "off_df": 0.0, "off_mf": 0.0, "off_fw": 0.0}
+# Parameters of the positioning model: how a team's shape follows the ball. Fitted on real tracking data (gamepulse/validation.py).
+# The block is the formation shape squeezed around its own centre (kx: depth, ky: width, per line), the centre follows the ball
+# (follow), and each line is nudged forward or back (off). Values below are the starting point of the fit.
+SHAPE = {"lh_in": 10.0, "lh_out": 24.0, "width_base": 0.818, "width_gain": 0.35, "ky_in": 0.798, "ky_out": 0.598, "support": 0.28,
+         "gk_base": 5.028, "gk_ball": 0.52, "ax_scale": 0.973, "follow_in": 0.422, "follow_out": 0.48,
+         "gy_df": 0.115, "gy_mf": 0.597, "gy_fw": 0.248,
+         "kx_in_df": 0.517, "kx_in_mf": 0.523, "kx_in_fw": 0.525, "kx_out_df": 0.65, "kx_out_mf": 0.486, "kx_out_fw": 0.41,
+         "off_in_df": 0.034, "off_in_mf": 0.012, "off_in_fw": -0.016, "off_out_df": 0.012, "off_out_mf": -0.008, "off_out_fw": -0.024}
+# Fitted with `python -m gamepulse.validation --fit` on 7 real Bundesliga matches (leave-matches-out: placement error 13.6 -> 13.0 m,
+# team shape gap 3.0 -> 1.6 m; a fixed formation shape that ignores the ball is off by 20.4 m).
+
+
+# Data prior built from real passes and shots (tools/build_zone_prior.py; Wyscout public dataset, CC BY 4.0, aggregated frequencies):
+# where passes go from each zone of the pitch, and how often an action in a zone is a shot.
+_PRIOR = json.loads((Path(__file__).with_name("zone_prior.json")).read_text())
+_NX, _NY = _PRIOR["nx"], _PRIOR["ny"]
+TRANS = np.array(_PRIOR["trans"])
+SHOT_RATE = np.array(_PRIOR["shot_rate"])
+ACC_START = np.array(_PRIOR["acc_start"])  # real pass accuracy by zone the pass starts from
+ACC_MEAN = _PRIOR["acc_mean"]
+
+
+def zone_of(x: float, y: float) -> int:
+    return min(_NX - 1, int(x / 100 * _NX)) * _NY + min(_NY - 1, int(y / 100 * _NY))
+
+
+# Passing and shooting behaviour, tuned against real passes and shots (tools/fit_sim.py, docs/CALIBRATION.md).
+PASS = {"acc_zone": 1.163, "prior": 1.624, "fwd_base": 1.947, "fwd_dir": 0.651, "recycle": 0.0, "wide": 0.684, "flat": 0.705, "dist_base": 6.507, "dist_dir": 13.932,
+        "rw_gk": 1.042, "rw_df": 1.596, "rw_mf": 1.0, "rw_fw": 0.715, "long_base": 0.01, "long_dir": 0.097}  # rw_*: how attractive a receiver of each line is
+SHOT = {"p": 1.364, "finish": 1.0, "alpha": 1.0}
+DYN = {"pressers": 1.0, "follow_rate": 0.7, "drift": 0.0}  # how many players chase the ball (scale) and how fast the others settle on their targets
+
+
+def _per_line(S, P: dict, prefix: str, gk: float = 0.0) -> np.ndarray:
+    """Per-slot value of a per-line parameter (`gk` for the goalkeeper)."""
+    return np.select([S.line == "DF", S.line == "MF", S.line == "FW"], [P[prefix + "_df"], P[prefix + "_mf"], P[prefix + "_fw"]], gk)
 
 
 def shape_targets(S, has_ball: bool, bx: float, by: float, params: dict | None = None) -> np.ndarray:
@@ -44,18 +80,17 @@ def shape_targets(S, has_ball: bool, bx: float, by: float, params: dict | None =
     P = params or SHAPE
     tac = S.tac
     lh = tac.line_height
+    phase = "in" if has_ball else "out"
+    cx0 = float(S.base[~S.gk, 0].mean())  # centre of the formation (outfield players)
     if has_ball:
-        tx = S.base[:, 0] + P["ball_shift_x"] * (bx - 50) + P["ax_scale"] * S.ax * (0.6 + 0.4 * tac.tempo) + (lh - 0.5) * P["lh_in"]
+        rel = S.base[:, 0] + P["ax_scale"] * S.ax * (0.6 + 0.4 * tac.tempo) + (lh - 0.5) * P["lh_in"]
         support = P["support"] * (1 - tac.directness)  # short build-up: players close in on the ball to offer passing options
     else:
-        tx = S.base[:, 0] + P["ball_shift_x"] * (bx - 50) + S.dx + (lh - 0.5) * P["lh_out"]
+        rel = S.base[:, 0] + S.dx + (lh - 0.5) * P["lh_out"]
+    tx = cx0 + (rel - cx0) * _per_line(S, P, "kx_" + phase, gk=1.0) + P["follow_" + phase] * (bx - 50) + _per_line(S, P, "off_" + phase)
     tx[S.gk] = P["gk_base"] + (lh - 0.5) * 8 + P["gk_ball"] * (bx - 50)
-    tx = tx + np.where(S.line == "DF", P["off_df"], np.where(S.line == "MF", P["off_mf"], np.where(S.line == "FW", P["off_fw"], 0.0)))
-    ty = 50 + (S.base[:, 1] - 50) * (P["width_base"] + P["width_gain"] * tac.width) * S.spread + P["ball_shift_y"] * (by - 50)
-    # real teams stay compact around the ball: the block shifts and squeezes with it
-    kx, ky = (P["kx_in"], P["ky_in"]) if has_ball else (P["kx_out"], P["ky_out"])
-    tx = np.where(S.gk, tx, bx + (tx - bx) * kx)
-    ty = np.where(S.gk, ty, by + (ty - by) * ky)
+    ty = 50 + (S.base[:, 1] - 50) * (P["width_base"] + P["width_gain"] * tac.width) * S.spread * P["ky_" + phase] \
+        + _per_line(S, P, "gy", gk=0.2) * (by - 50)
     if has_ball:
         near = ~S.gk & (S.base[:, 0] < 68)  # forwards keep their shape: they are the targets of the build-up
         tx = np.where(near, tx + (bx - tx) * support * 0.4, tx)
@@ -109,6 +144,7 @@ class MatchSimulator:
         self.add_scenario(scenario)
         self.score = {self.home.id: 0, self.away.id: 0}
         self.poss_time = {self.home.id: 0.0, self.away.id: 0.0}
+        self.run_m = {self.home.id: 0.0, self.away.id: 0.0}
         self._eid = 0
         self.poss = self.home.id
         self.c = 0  # carrier index in the possessing side
@@ -173,12 +209,12 @@ class MatchSimulator:
         full = np.zeros(11, bool)
         if has_ball:
             c = self.c
-            tgt[c] = (min(97.0, S.pos[c, 0] + 2.5), S.pos[c, 1])
+            tgt[c] = (min(97.0, S.pos[c, 0] + DYN["drift"]), S.pos[c, 1])
             full[c] = True
         else:
             d = np.hypot(S.pos[:, 0] - bx, S.pos[:, 1] - by)
             radius = (16 + 30 * tac.pressing) * S.fat
-            k = 1 + int(round(tac.pressing * 3 * S.fat))
+            k = int(round(DYN["pressers"] * (1 + tac.pressing * 3 * S.fat)))
             ok = np.where(~S.gk & S.active & (d < radius * S.pr))[0]
             ok = ok[np.argsort(d[ok])][:k]
             for i in ok:
@@ -189,10 +225,12 @@ class MatchSimulator:
         vec = tgt - S.pos
         dist = np.hypot(vec[:, 0], vec[:, 1]) + 1e-9
         max_step = 5.0 * (S.pace * S.inj / 75.0) * S.fat * dt
-        frac = np.minimum(1.0, max_step / dist) * np.where(full, 1.0, 0.7)
+        frac = np.minimum(1.0, max_step / dist) * np.where(full, 1.0, DYN["follow_rate"])
         step = vec * frac[:, None] + self.nprng.normal(0, 0.25, (11, 2))
         step[~S.active] = 0
-        S.pos = np.clip(S.pos + step, 1.0, 99.0)
+        new = np.clip(S.pos + step, 1.0, 99.0)
+        self.run_m[S.id] += float(np.hypot(*((new - S.pos) * np.array([KX, KY])).T)[~S.gk].sum())  # distance run by the outfield players
+        S.pos = new
 
     # ------------------------------------------------------------------ one tick
     def _step(self, t: float, dt: float, evs: list[Event]):
@@ -244,9 +282,7 @@ class MatchSimulator:
         # ---- choose action
         fx, fy = float(me[0]), float(me[1])
         in_box = fx > 84 and abs(fy - 50) < 24
-        central = abs(fy - 50) < 22
-        zone = (1.7 if in_box else 1.0 if (fx > 76 and central) else 0.5 if fx > 76 else 0.2 if fx > 66 else 0.0)
-        shoot_p = 0.080 * (0.5 + 0.5 * role["sh"]) * zone * (0.7 + 0.3 * P.attr(c, "shooting") / 70)
+        shoot_p = SHOT["p"] * SHOT_RATE[zone_of(fx, fy)] ** SHOT["alpha"] * (0.5 + 0.5 * role["sh"]) * (0.7 + 0.3 * P.attr(c, "shooting") / 70)
         drib_p = 0.07 * role["dr"] * (P.attr(c, "dribbling") / 70) * (1.4 if dmin < 9 else 0.7)
         # patient teams also move the ball forward by carrying it into open space (safe territorial gain)
         ahead = opp[opp[:, 0] > fx - 2]
@@ -303,26 +339,29 @@ class MatchSimulator:
             if dm < 4:
                 continue
             open_r = min(14.0, float(self._dists_m(rp, opp).min()))
-            w_dir = 0.9 + 1.0 * directness + 1.2 * role["fw"]
+            w_dir = PASS["fwd_base"] + PASS["fwd_dir"] * directness + 1.2 * role["fw"]
             w = math.exp(fwd / 22 * w_dir) * (0.35 + open_r / 14) ** (1 + 0.8 * (1 - directness))  # patient teams only find the free man
-            w *= math.exp(-dm / (5 + 14 * directness + P.attr(c, "vision") / 12))
+            w *= math.exp(-dm / (PASS["dist_base"] + PASS["dist_dir"] * directness + P.attr(c, "vision") / 12))
             if fwd < 0:  # recycling the ball is what patient teams do under pressure
-                w *= 1 + 2.0 * (1 - directness) * max(0.0, min(pressure, 2.0) - 0.3)
+                w *= 1 + PASS["recycle"] * (1 - directness) * max(0.0, min(pressure, 2.0) - 0.3)
             if fwd > 0:
                 w *= 1 - 0.5 * max(0.0, role["sf"])
+            w *= (1 + PASS["wide"] * abs(float(rp[1]) - 50) / 50) * PASS["rw_" + P.team.players[i].position.lower()]
+            w *= TRANS[zone_of(float(me[0]), float(me[1])), zone_of(float(rp[0]), float(rp[1]))] ** PASS["prior"]  # where real passes go
             cands.append((i, fwd, dm, open_r))
             weights.append(w)
         if not cands:
             return
         # direct teams (and anyone under pressure) hit long balls: big territorial gain, but they are often lost
-        if rng.random() < 0.01 + 0.10 * directness + 0.04 * min(pressure, 2.0) * directness:
+        if rng.random() < PASS["long_base"] + PASS["long_dir"] * directness + 0.04 * min(pressure, 2.0) * directness:
             longs = [(k, w) for k, w in zip(cands, weights) if k[1] > 12 and k[2] >= 25]
             if longs:
                 cands, weights = [k for k, _ in longs], [w for _, w in longs]
-        i, fwd, dm, open_r = rng.choices(cands, weights=[w ** 0.65 for w in weights])[0]  # flatter: passing is spread over the whole team
+        i, fwd, dm, open_r = rng.choices(cands, weights=[w ** PASS["flat"] for w in weights])[0]  # flatter: passing is spread over the whole team
         p = (1.19 - 0.10 * (P.tac.tempo - 0.5) - 0.0066 * dm * (1.2 - P.attr(c, "vision") / 150) - 0.11 * min(pressure * (0.6 + 0.8 * D.tac.pressing), 2.0)
              - 0.17 * (1 - open_r / 14) + (P.attr(c, "passing") - 70) / 250
              - 0.15 * max(0.0, fwd) / 40 * (1 - max(0.0, role["sf"])) + 0.04 * self._numeric(P, D))
+        p += PASS["acc_zone"] * (ACC_START[zone_of(float(me[0]), float(me[1]))] - ACC_MEAN)  # real accuracy of passes from this part of the pitch
         ok = rng.random() < _clamp(p, 0.3, 0.97)
         rp = P.pos[i]
         ev = self._ev(t, "pass", P.id, player=P.team.players[c].id, x=float(me[0]), y=float(me[1]),
@@ -343,16 +382,13 @@ class MatchSimulator:
         rng, c = self.rng, self.c
         me = P.pos[c]
         dist = max(4.0, math.hypot((100 - me[0]) * KX, (50 - me[1]) * KY))
-        lateral = abs(me[1] - 50) * KY
-        angle = math.atan2(7.32 * (100 - me[0]) * KX, ((100 - me[0]) * KX) ** 2 + lateral ** 2 - 3.66 ** 2 + 1e-9)
-        angle = angle if angle > 0 else angle + math.pi
-        xg = 0.90 * math.exp(-dist / 9.5) * (0.35 + 0.65 * min(1.0, angle / 0.55)) * (1 - 0.18 * min(pressure, 2.0))
-        xg = xg * (1 + 0.5 * (0.5 - P.tac.directness) * 0.6)  # patient build-up finds better shots, direct play takes what it gets
+        xg = estimate_xg(float(me[0]), float(me[1]))  # fitted on real shots (tools/fit_xg.py), then adjusted for the situation
+        xg = xg * (1 - 0.18 * min(pressure, 2.0)) * (1 + 0.5 * (0.5 - P.tac.directness) * 0.6)
         xg = _clamp(xg * (1 + 0.09 * self._numeric(P, D)), 0.01, 0.8)
         finishing = P.attr(c, "shooting") / 70
         keeper = D.attr(0, "keeping") / 75
         roll = rng.random()
-        if roll < xg * finishing / keeper * 1.12:
+        if roll < xg * finishing / keeper * SHOT["finish"]:
             outcome = "goal"
         else:
             r2 = rng.random()
