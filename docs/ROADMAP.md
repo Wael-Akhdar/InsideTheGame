@@ -55,6 +55,22 @@ rules before building it for the submission:
 - If we want to go further (a model over real video), ask the organisers in writing before the deadline (rule 11.6 covers
   requests for clarification). Do not commit any real footage or data to the public repo.
 
+### Organizers' answer (hackathon support, 13 Oct 2026)
+We asked three questions in writing and support replied by email:
+1. **Open datasets to calibrate the simulator**: yes, "you can use any data" as long as the hackathon rules are respected,
+   with **no trademark issues**.
+2. **Our own rendered footage for video eventing**: yes.
+3. **Real footage we have the rights to** (e.g. amateur footage we filmed): yes.
+
+Keep the email as evidence. What this does and does not change:
+- Open datasets (StatsBomb Open Data, SkillCorner Open Data, Metrica sample data, Wyscout public dataset) are usable to
+  calibrate and validate the simulator, and as an alternative input stream for the pipeline. Check each licence yourself
+  and credit the source in text.
+- **Trademarks**: do not use third-party logos (including the StatsBomb logo that its terms ask for, Premier League or club
+  crests). Credit by name in text, and pseudonymise real clubs and players in any demo or screenshot.
+- Do not commit raw third-party data or footage to the public repo; keep downloads in a git-ignored folder and commit only
+  aggregated calibration results and code.
+
 ## Open design questions
 - How much should the LLM decide versus the parameters? Today the LLM only writes validated parameters and rules; the
   simulator stays deterministic and testable.
