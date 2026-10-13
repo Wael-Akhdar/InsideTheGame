@@ -226,8 +226,9 @@ class MatchSimulator:
         # ---- choose action
         fx, fy = float(me[0]), float(me[1])
         in_box = fx > 84 and abs(fy - 50) < 24
-        zone = 1.6 if in_box else (0.95 if fx > 70 else 0.0)
-        shoot_p = 0.052 * (0.5 + 0.5 * role["sh"]) * zone * (0.7 + 0.3 * P.attr(c, "shooting") / 70)
+        central = abs(fy - 50) < 22
+        zone = (1.7 if in_box else 1.0 if (fx > 76 and central) else 0.5 if fx > 76 else 0.2 if fx > 66 else 0.0)
+        shoot_p = 0.080 * (0.5 + 0.5 * role["sh"]) * zone * (0.7 + 0.3 * P.attr(c, "shooting") / 70)
         drib_p = 0.07 * role["dr"] * (P.attr(c, "dribbling") / 70) * (1.4 if dmin < 9 else 0.7)
         # patient teams also move the ball forward by carrying it into open space (safe territorial gain)
         ahead = opp[opp[:, 0] > fx - 2]
@@ -286,7 +287,7 @@ class MatchSimulator:
             open_r = min(14.0, float(self._dists_m(rp, opp).min()))
             w_dir = 0.9 + 1.0 * directness + 1.2 * role["fw"]
             w = math.exp(fwd / 22 * w_dir) * (0.35 + open_r / 14) ** (1 + 0.8 * (1 - directness))  # patient teams only find the free man
-            w *= math.exp(-dm / (6 + 16 * directness + P.attr(c, "vision") / 12))
+            w *= math.exp(-dm / (5 + 14 * directness + P.attr(c, "vision") / 12))
             if fwd < 0:  # recycling the ball is what patient teams do under pressure
                 w *= 1 + 2.0 * (1 - directness) * max(0.0, min(pressure, 2.0) - 0.3)
             if fwd > 0:
@@ -296,11 +297,11 @@ class MatchSimulator:
         if not cands:
             return
         # direct teams (and anyone under pressure) hit long balls: big territorial gain, but they are often lost
-        if rng.random() < 0.01 + 0.14 * directness + 0.04 * min(pressure, 2.0) * directness:
+        if rng.random() < 0.01 + 0.10 * directness + 0.04 * min(pressure, 2.0) * directness:
             longs = [(k, w) for k, w in zip(cands, weights) if k[1] > 12 and k[2] >= 25]
             if longs:
                 cands, weights = [k for k, _ in longs], [w for _, w in longs]
-        i, fwd, dm, open_r = rng.choices(cands, weights=weights)[0]
+        i, fwd, dm, open_r = rng.choices(cands, weights=[w ** 0.65 for w in weights])[0]  # flatter: passing is spread over the whole team
         p = (1.19 - 0.10 * (P.tac.tempo - 0.5) - 0.0066 * dm * (1.2 - P.attr(c, "vision") / 150) - 0.11 * min(pressure * (0.6 + 0.8 * D.tac.pressing), 2.0)
              - 0.17 * (1 - open_r / 14) + (P.attr(c, "passing") - 70) / 250
              - 0.15 * max(0.0, fwd) / 40 * (1 - max(0.0, role["sf"])) + 0.04 * self._numeric(P, D))
@@ -333,7 +334,7 @@ class MatchSimulator:
         finishing = P.attr(c, "shooting") / 70
         keeper = D.attr(0, "keeping") / 75
         roll = rng.random()
-        if roll < xg * finishing / keeper * 1.18:
+        if roll < xg * finishing / keeper * 1.12:
             outcome = "goal"
         else:
             r2 = rng.random()
