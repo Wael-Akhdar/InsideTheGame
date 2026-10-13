@@ -73,6 +73,13 @@ def validate_stream(feed: Feed, ticks: Optional[Iterable[Tick]] = None, limit: i
             if e.clock + 1e-6 < last_clock:
                 problems.append(f"event {e.id}: goes back in time ({e.clock:.2f} < {last_clock:.2f})")
             last_id, last_clock = e.id, max(last_clock, e.clock)
+        fp = tk.frame.get("p") if tk.frame else None
+        if fp is not None:  # player positions are optional, but when present they must be complete and on the pitch
+            if len(fp) != 22 or not all(0 <= x <= 100 and 0 <= y <= 100 for x, y in fp):
+                problems.append(f"tick at {tk.t}: frame needs 22 positions inside the pitch")
+            slot_ids = tk.frame.get("ids")
+            if slot_ids is not None and (len(slot_ids) != 22 or any(i and i not in players for i in slot_ids)):
+                problems.append(f"tick at {tk.t}: frame ids must list 22 known players (or empty slots)")
         if tk.frame and tk.frame.get("poss") not in (None, home.id, away.id):
             problems.append(f"tick at {tk.t}: unknown possession team {tk.frame['poss']!r}")
         if len(problems) >= limit:

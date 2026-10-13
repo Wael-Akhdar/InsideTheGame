@@ -36,7 +36,7 @@ def test_hub_player_needs_a_real_share_of_the_passing():
             i += 1
             found += st.ingest(_ev(i, minute, "pass", "H", player="H5" if k % 2 == 0 else "H3", outcome="success", meta={"receiver": "H5"}))
     hubs = [m for m in found if m.kind == "key_player"]
-    assert hubs and hubs[0].player == "H5" and hubs[0].facts["share"] >= 26
+    assert hubs and hubs[0].player == "H5" and hubs[0].facts["share"] >= 23
 
 
 def test_goalkeepers_are_never_the_key_player():

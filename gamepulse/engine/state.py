@@ -183,7 +183,7 @@ class MatchState:
 
     def _detect_swings(self, ev: Event) -> list[Moment]:
         out: list[Moment] = []
-        if len(self._momentum_hist) < 20 or ev.clock - self._last_swing_clock < 15:
+        if len(self._momentum_hist) < 20 or ev.clock < 10 or ev.clock - self._last_swing_clock < 20:
             return out
         past = [m for c, m in self._momentum_hist if ev.clock - c >= 4]
         if not past:

@@ -174,7 +174,7 @@ class WyscoutFeed:
             elif (name == "Shot" or (name == "Free Kick" and sub in ("Free kick shot", "Penalty"))) and pid:
                 outcome = "goal" if GOAL in tags else "blocked" if BLOCKED in tags else "saved" if ACCURATE in tags else "off_target"
                 shot = make(t, "shot", team, player=pid, x=clamp(x0), y=clamp(y0), end_x=100.0, end_y=50.0, outcome=outcome,
-                            xg=estimate_xg(x0, y0, penalty=sub == "Penalty", header=HEAD in tags),
+                            xg=estimate_xg(x0, y0, penalty=sub == "Penalty", header=HEAD in tags, freekick=sub == "Free kick shot"),
                             meta={"distance_m": round(math.hypot((100 - x0) * KX, (50 - y0) * KY), 1), "xg_estimated": True})
                 out.append(shot)
                 if outcome == "goal":

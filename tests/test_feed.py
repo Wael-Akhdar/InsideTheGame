@@ -64,3 +64,42 @@ def test_the_same_pipeline_runs_on_a_real_match():
     assert orch.state.score == feed.official_score
     assert overlays and all(o.evidence and o.explanation for o in overlays)
     assert abs(sum(orch.state.possession().values()) - 100) < 0.5
+
+
+# ----------------------------------------------------------------- real match with tracking (Sportec)
+from gamepulse.feed.sportec import DATA as SPORTEC_DATA  # noqa: E402
+from gamepulse.feed.sportec import SportecFeed, available_matches  # noqa: E402
+
+needs_tracking = pytest.mark.skipif(not (SPORTEC_DATA.exists() and available_matches()), reason="run tools/fetch_sportec.py first")
+
+
+@needs_tracking
+def test_tracked_match_satisfies_the_contract_with_positions():
+    feed = SportecFeed()
+    validate_stream(feed)  # also checks that every frame holds 22 on-pitch positions and known player ids
+    ticks = list(feed.ticks())
+    assert len(ticks) > 2000 and all(len(t.frame["p"]) == 22 for t in ticks[1:-1])
+    goals = {"HOM": 0, "AWY": 0}
+    for tk in ticks:
+        for e in tk.events:
+            goals[e.team] += e.type == "goal"
+    assert goals == feed.official_score
+
+
+@needs_tracking
+def test_tracked_match_is_pseudonymised_and_uses_the_providers_xg():
+    feed = SportecFeed()
+    assert all(re.fullmatch(r"(Home|Away) #\d+", p.name) and p.number <= 25 for t in feed.teams for p in t.players)
+    shots = [e for tk in feed.ticks() for e in tk.events if e.type == "shot"]
+    assert shots and all(e.xg is not None and not e.meta["xg_estimated"] for e in shots)
+
+
+@needs_tracking
+def test_the_same_pipeline_runs_on_the_tracked_match():
+    feed = SportecFeed()
+    orch = Orchestrator(*feed.teams)
+    overlays = []
+    for tk in feed.ticks():
+        overlays += orch.process_tick(tk, Viewer(mode="analyst"))
+    assert orch.state.score == feed.official_score
+    assert overlays and all(o.evidence and o.explanation for o in overlays)

@@ -54,7 +54,7 @@ def unlucky_dominance(state: "MatchState", m: int) -> list[Moment]:
 def pressing_fade(state: "MatchState", m: int) -> list[Moment]:
     """The team's pressing activity has dropped well below its early-match level, and the opponent benefits."""
     out: list[Moment] = []
-    if m < 55:
+    if m < 55 or not any(e.type == "pressure" for e in state.events):  # needs a feed that reports pressing
         return out
     press = ("pressure", "tackle")
     for team, opp in ((state.home, state.away), (state.away, state.home)):
@@ -95,7 +95,7 @@ def hub_player(state: "MatchState", m: int) -> list[Moment]:
             if state.roster.get(pid, {}).get("line") == "GK":
                 continue
             share = 100 * n / (2 * len(passes))
-            if share >= 26 and n >= 24 and _ok(state, ("hub", pid), m, 30):
+            if share >= 23 and n >= 24 and _ok(state, ("hub", pid), m, 30):  # real matches: median 16.5%, 95th percentile 22%
                 ev = [e.id for e in passes if e.player == pid or e.meta.get("receiver") == pid][-8:]
                 out.append(Moment("key_player", m, team, pid, 0.62, ev, {"share": round(share), "involvements": n, "typical": round(100 / 11)}))
             break
