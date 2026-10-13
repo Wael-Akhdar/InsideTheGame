@@ -14,6 +14,8 @@ from ..agents.interpreter import interpret_role, interpret_scenario
 from ..agents.pipeline import Orchestrator, Viewer
 from ..lab import evaluate, what_if
 from ..scenario import PRESET_SCENARIOS, describe_rule, sanitize
+from ..feed import SimulatorFeed
+from ..feed.wyscout import LEAGUES, DataMissing, WyscoutFeed, list_matches
 from ..simulator.match import MatchSimulator
 from ..tactics import PRESETS, describe_catalog, get_formation, resolve_tactic
 
@@ -67,9 +69,21 @@ async def ai_scenario(body: dict = Body(...)):
     return await run_in_threadpool(interpret_scenario, str(body.get("text", "")))
 
 
+@app.get("/api/feeds/wyscout/{league}")
+def wyscout_matches(league: str):
+    """Real matches available (public Wyscout dataset, CC BY 4.0). No club names: matchday and date only."""
+    if league not in LEAGUES:
+        raise HTTPException(404, f"league must be one of {LEAGUES}")
+    try:
+        return list_matches(league)
+    except DataMissing as e:
+        raise HTTPException(404, str(e))
+
+
 @app.get("/api/match/stream")
 async def stream(seed: int = 42, speed: float = 60.0, mode: str = "casual", lang: str = "en",
                  home: Optional[str] = None, away: Optional[str] = None, scenario: Optional[str] = None,
+                 source: str = "sim", league: str = "Spain",
                  sid: Optional[str] = None, team: Optional[str] = None, player: Optional[str] = Query(None)):
     speed = max(1.0, min(speed, 2000.0))
     scn = None
@@ -78,25 +92,36 @@ async def stream(seed: int = 42, speed: float = 60.0, mode: str = "casual", lang
             scn = sanitize(json.loads(scenario))
         except json.JSONDecodeError:
             scn = None
-    sim = MatchSimulator(seed=seed, home_tactic=_spec(home, "Possession 4-3-3"), away_tactic=_spec(away, "Counter-attack 4-4-2"),
-                         scenario=scn)
+    if source == "wyscout":  # a real match: events only, pseudonymised, same pipeline
+        if league not in LEAGUES:
+            raise HTTPException(404, f"league must be one of {LEAGUES}")
+        try:
+            feed = await run_in_threadpool(WyscoutFeed, league, seed)
+        except DataMissing as e:
+            raise HTTPException(404, str(e))
+    else:
+        feed = SimulatorFeed(seed=seed, home_tactic=_spec(home, "Possession 4-3-3"), away_tactic=_spec(away, "Counter-attack 4-4-2"),
+                             scenario=scn)
+    sim = getattr(feed, "sim", None)  # live coaching only exists for simulated matches
     sess = {"speed": speed, "paused": False, "queue": []}
     if sid:
         SESSIONS[sid] = sess
-    orch = Orchestrator(sim.home, sim.away)
+    orch = Orchestrator(*feed.teams)
     viewer = Viewer(mode=mode if mode in ("casual", "analyst") else "casual", lang=lang if lang in ("en", "fr", "es", "ar") else "en",
                     favorite_team=team, focus_player=player)
 
     def team_meta(t):
-        return {"id": t.id, "name": t.name, "tactic": t.tactic.to_dict(),
+        return {"id": t.id, "name": t.name, "tactic": t.tactic.to_dict() if t.tactic else None,
                 "players": [{"id": p.id, "name": p.name, "number": p.number, "slot": p.slot, "role": p.role, "line": p.position}
                             for p in t.players]}
 
     async def gen():
-        yield f"event: meta\ndata: {json.dumps({'home': team_meta(sim.home), 'away': team_meta(sim.away)})}\n\n"
+        meta = {"home": team_meta(feed.teams[0]), "away": team_meta(feed.teams[1]), "source": feed.name,
+                "label": getattr(feed, "label", "Simulated match")}
+        yield f"event: meta\ndata: {json.dumps(meta)}\n\n"
         prev = 0.0
         try:
-            for tk in sim.ticks():
+            for tk in feed.ticks():
                 while sess["paused"]:
                     await asyncio.sleep(0.1)
                 wait = max(0.0, (tk.t - prev) / max(1.0, sess["speed"]))  # speed can change at any time
@@ -109,6 +134,8 @@ async def stream(seed: int = 42, speed: float = 60.0, mode: str = "casual", lang
                 yield f"data: {json.dumps(payload)}\n\n"
                 while sess["queue"]:  # coach commands take effect before the next tick is simulated
                     cmd = sess["queue"].pop(0)
+                    if sim is None:
+                        continue
                     if cmd["type"] == "tactic":
                         sim.set_tactic(sim.home.id if cmd["team"] == "home" else sim.away.id, cmd["spec"], announce=True)
                     elif cmd["type"] == "scenario":

@@ -5,6 +5,12 @@ A tactical football lab and live match intelligence engine. Coaches design a for
 
 Built for the *Inside the Game: Developer Hackathon* (Microsoft x Premier League). All data is synthetic: clubs and players are fictional.
 
+## Simulated or real: one pipeline
+Everything the analysis sees goes through an **event contract** (`docs/EVENT_CONTRACT.md`): line-ups and a stream of events.
+The simulator is one source; a real match from the public Wyscout dataset (CC BY 4.0, pseudonymised) is another, selectable in the
+Live match tab ("Data source"). On 180 real matches the events rebuild the official score every time.
+Real-match data: Pappalardo et al. (2019), *A public data set of spatio-temporal match events in soccer competitions*, Scientific Data 6:236.
+
 ## Insights the TV does not show
 A goal is obvious on screen. GamePulse looks for what is not (`gamepulse/engine/insights.py`):
 - **Dominant, not rewarded**: a team far ahead in expected goals but level or behind.

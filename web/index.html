@@ -71,13 +71,14 @@
 <!-- ====================================================== MATCH -->
 <section id="tab-match" class="tab on">
   <div class="bar">
+    <label class="f">Data source <select id="mSource"><option value="sim">Simulated match</option><option value="Spain">Real match: Spain</option><option value="Italy">Real match: Italy</option><option value="France">Real match: France</option><option value="Germany">Real match: Germany</option><option value="England">Real match: England</option></select></label>
     <label class="f">Home tactic <select id="mHome"></select></label>
     <label class="f">Away tactic <select id="mAway"></select></label>
     <label class="f">View <select id="mMode"><option value="casual">Casual fan</option><option value="analyst">Analyst</option></select></label>
     <label class="f">Language <select id="mLang"><option value="en">English</option><option value="fr">Français</option><option value="es">Español</option><option value="ar">العربية</option></select></label>
     <label class="f">Scenario <select id="mScn"></select></label>
     <label class="f">Speed (live) <select id="mSpeed"><option value="10">x10</option><option value="30">x30</option><option value="60" selected>x60</option><option value="150">x150</option><option value="400">x400</option><option value="1000">x1000</option></select></label>
-    <label class="f">Seed <input type="text" id="mSeed" value="42" size="5"></label>
+    <label class="f"><span id="mSeedLbl">Seed</span> <input type="text" id="mSeed" value="42" size="5"></label>
     <button class="primary" id="go">Kick off</button>
     <button class="ghost" id="pause">Pause</button>
     <button class="ghost" id="stop">Stop</button>
@@ -96,7 +97,7 @@
           <div class="t a"><b id="an">Northgate United</b><small id="at"></small></div>
         </div>
         <canvas id="pitch" width="1050" height="680"></canvas>
-        <div class="legend"><span><i class="dot" style="background:#00ff85"></i>Home</span><span><i class="dot" style="background:#e90052"></i>Away</span><span>○ pressure zone around the ball carrier · hover a player for details</span></div>
+        <div class="legend"><span><i class="dot" style="background:#00ff85"></i>Home</span><span><i class="dot" style="background:#e90052"></i>Away</span><span id="legendNote">○ pressure zone around the ball carrier · hover a player for details</span></div>
       </div>
       <div class="card" style="margin-top:12px"><h3>Live coaching <b>change anything while the match runs</b></h3>
         <div class="row" style="margin-top:0">
@@ -279,9 +280,32 @@ function lerpState(now) {
            carrier: cur.carrier, off: cur.off || [], poss: cur.poss };
 }
 
+function drawMarkers(now) {
+  const W = pc.width, H = pc.height, X = x => x / 100 * W, Y = y => y / 100 * H;
+  markers = markers.filter(m => now - m.t < 5000);
+  for (const { t, ev } of markers) {
+    const a = 1 - (now - t) / 5000, home = teams && ev.team === teams.home.id, f = (x, y) => home ? [X(x), Y(y)] : [X(100 - x), Y(100 - y)];
+    const col = home ? HOME : AWAY, [x0, y0] = f(ev.x, ev.y);
+    pctx.globalAlpha = Math.max(0.1, a); pctx.lineWidth = 3; pctx.strokeStyle = col; pctx.fillStyle = col;
+    if (ev.type === "pass" && ev.end_x != null) {
+      const [x1, y1] = f(ev.end_x, ev.end_y); pctx.setLineDash(ev.outcome === "success" ? [] : [6, 6]);
+      pctx.beginPath(); pctx.moveTo(x0, y0); pctx.lineTo(x1, y1); pctx.stroke(); pctx.setLineDash([]);
+      pctx.beginPath(); pctx.arc(x1, y1, 5, 0, 7); pctx.fill();
+    } else if (ev.type === "shot") {
+      const [gx, gy] = f(100, 50); pctx.strokeStyle = "#ffd23f"; pctx.fillStyle = "#ffd23f";
+      pctx.beginPath(); pctx.moveTo(x0, y0); pctx.lineTo(gx, gy); pctx.stroke();
+      pctx.beginPath(); pctx.arc(x0, y0, ev.outcome === "goal" ? 16 : 10, 0, 7); pctx.fill();
+    } else if (ev.type === "tackle") { pctx.font = "bold 20px system-ui"; pctx.fillText("✕", x0 - 7, y0 + 7); }
+    else if (ev.type === "foul") { pctx.font = "bold 20px system-ui"; pctx.fillText("!", x0 - 3, y0 + 7); }
+    else if (ev.type === "card") { pctx.fillStyle = ev.outcome === "red" ? "#ff2d2d" : "#ffd23f"; pctx.fillRect(x0 - 8, y0 - 11, 16, 22); }
+  }
+  pctx.globalAlpha = 1;
+}
+
 function renderPitch(now) {
   const W = pc.width, H = pc.height;
   drawPitchLines(pctx, W, H);
+  if (!cur && markers.length) drawMarkers(now);
   const s = shown = lerpState(now);
   if (s) {
     const X = x => x / 100 * W, Y = y => y / 100 * H;
@@ -366,11 +390,13 @@ function updateHud(s, frame) {
 
 /* ---------------------------------------------------------------- live match stream + live control */
 let es = null, ovCount = 0, curSid = null, paused = false, curMinute = 0;
+let markers = [];  // recent events drawn on the pitch when the feed has no player positions (real matches)
 const control = async body => { if (!es || !curSid) return null; try { return await post("/api/match/control", { sid: curSid, ...body }); } catch (e) { return null; } };
 
 $("stop").onclick = () => { if (es) es.close(); es = null; };
 $("pause").onclick = () => { paused = !paused; $("pause").textContent = paused ? "Resume" : "Pause"; control({ paused }); };
 $("mSpeed").onchange = () => control({ speed: +$("mSpeed").value });
+$("mSource").onchange = () => { const real = $("mSource").value !== "sim"; $("mSeedLbl").textContent = real ? "Match #" : "Seed"; $("mSeed").value = real ? "5" : "42"; };
 
 $("go").onclick = () => {
   if (es) es.close();
@@ -379,19 +405,27 @@ $("go").onclick = () => {
   const q = new URLSearchParams({ home: tacticParam(selVal($("mHome"))), away: tacticParam(selVal($("mAway"))), mode: $("mMode").value,
                                   lang: $("mLang").value, speed: $("mSpeed").value, seed: parseInt($("mSeed").value) || 42, sid: curSid });
   const sc = currentScenario("mScn", mScn); if (sc) q.set("scenario", JSON.stringify(sc));
+  const src = $("mSource").value; if (src !== "sim") { q.set("source", "wyscout"); q.set("league", src); }
+  markers = [];
   es = new EventSource("/api/match/stream?" + q);
   es.addEventListener("meta", e => {
     teams = JSON.parse(e.data);
     ids = [...teams.home.players, ...teams.away.players].map(p => p.id);
     $("hn").textContent = teams.home.name; $("an").textContent = teams.away.name;
-    $("ht").textContent = `${teams.home.tactic.name}`; $("at").textContent = `${teams.away.tactic.name}`;
-    liveTac = { home: { ...teams.home.tactic }, away: { ...teams.away.tactic } }; buildLiveCoach();
+    $("ht").textContent = teams.home.tactic ? teams.home.tactic.name : ""; $("at").textContent = teams.away.tactic ? teams.away.tactic.name : "";
+    liveTac = { home: teams.home.tactic ? { ...teams.home.tactic } : null, away: teams.away.tactic ? { ...teams.away.tactic } : null }; buildLiveCoach();
+    $("legendNote").textContent = teams.source === "wyscout"
+      ? `Real match (${teams.label}), pseudonymised. Events only, so no player positions. Data: Pappalardo et al. 2019, Wyscout public dataset, CC BY 4.0.`
+      : "○ pressure zone around the ball carrier · hover a player for details";
+    if (teams.source === "wyscout") chips($("lcOut"), ["Live coaching and scenarios only apply to simulated matches."]);
   });
   es.addEventListener("end", () => { es.close(); es = null; });
   es.onmessage = e => {
     const d = JSON.parse(e.data), now = performance.now();
     if (d.frame && d.frame.p) { prev = lerpState(now) || null; cur = d.frame; tStart = now; dur = clamp(now - lastArr, 30, 400); lastArr = now; }
     curMinute = d.snapshot.minute;
+    if (!(d.frame && d.frame.p)) for (const ev of d.events) if (ev.x != null && ["pass", "shot", "tackle", "foul", "card"].includes(ev.type)) markers.push({ t: now, ev });
+    if (markers.length > 40) markers = markers.slice(-40);
     hist[d.snapshot.minute] = d.snapshot;
     updateHud(d.snapshot, d.frame);
     if (d.snapshot.minute !== (redrawCharts.last ?? -1) || d.events.some(x => x.type === "goal")) { redrawCharts.last = d.snapshot.minute; redrawCharts(); }
@@ -561,6 +595,7 @@ fetch("/api/catalog").then(r => r.json()).then(c => {
   newEd(c.presets.find(t => t.name === "Balanced 4-3-3"));
   if (location.hash === "#tactics") document.querySelector("[data-tab=tactics]").click();
   if (location.hash === "#lab") { document.querySelector("[data-tab=lab]").click(); $("lRun").click(); }
+  if (location.hash === "#real") { $("mSource").value = "Italy"; $("mSource").onchange(); $("mSeed").value = "40"; $("mSpeed").value = "400"; $("go").click(); }
   if (location.hash === "#demo") { $("mSpeed").value = "150"; $("go").click(); }
 });
 </script>

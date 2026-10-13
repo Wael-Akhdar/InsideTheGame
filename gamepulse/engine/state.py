@@ -103,7 +103,7 @@ class MatchState:
             if ps is not None:
                 ps["goals"] += 1
             new.append(Moment("goal", ev.minute, ev.team, ev.player, 1.0, [ev.id, ev.meta.get("assist_shot_id", ev.id)],
-                              {"score": dict(self.score), "xg": ev.xg}))
+                              {"score": dict(self.score), "xg": ev.xg, "own_goal": bool(ev.meta.get("own_goal"))}))
         elif ev.type == "tackle" and st:
             st.tackles += 1
             st.tackles_won += ev.outcome == "won"

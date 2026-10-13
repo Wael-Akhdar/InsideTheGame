@@ -67,6 +67,8 @@ class ExplainerAgent(Agent):
         diff = score[m.team] - score[a if m.team == b else b]
         team = self.tname(m.team)
         cvc = state.control_vs_chaos()
+        if m.kind == "goal" and m.facts.get("own_goal"):
+            return f"An own goal: {team} are credited with it ({self.tname(a)} {score[a]}-{score[b]} {self.tname(b)})."
         if m.kind == "goal":
             ctx = "levels the match" if diff == 0 else ("puts them ahead" if diff == 1 else
                   ("extends the lead" if diff > 1 else "pulls one back"))
@@ -127,7 +129,7 @@ class NarratorAgent(Agent):
     def run(self, m: Moment, why: str, v: Viewer, state: MatchState, plain: Optional[str] = None) -> tuple[str, str]:
         player, team = self.pname(m.player), self.tname(m.team)
         headline = {
-            "goal": f"GOAL! {player} ({team})", "big_chance": f"Big chance for {player}!",
+            "goal": (f"OWN GOAL - {team} are credited" if m.facts.get("own_goal") else f"GOAL! {player} ({team})"), "big_chance": f"Big chance for {player}!",
             "momentum_swing": f"{team} take control", "red_card": f"RED CARD - {player}",
             "tactic_change": f"{team} switch tactics", "injury": f"{player} ({team}) is hurt",
             "unlucky": f"{team}: dominant, not rewarded", "pressing_fade": f"{team}'s pressing is fading",

@@ -465,7 +465,6 @@ class MatchSimulator:
         while t < total:
             if t >= HALF and not half_done:
                 half_done = True
-                t = float(HALF)
                 self._kickoff(self.away.id)
                 yield Tick(t, self._frame(t), [self._ev(t, "halftime", self.away.id)])
                 continue
