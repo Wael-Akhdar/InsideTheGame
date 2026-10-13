@@ -15,7 +15,7 @@ from pathlib import Path
 
 DEST = Path(__file__).resolve().parents[1] / "data" / "external" / "wyscout"
 API = "https://api.figshare.com/v2/articles/{id}"
-ARTICLES = {"matches.zip": 7770422, "events.zip": 7770599}  # figshare article ids (both CC BY 4.0)
+ARTICLES = {"matches.zip": 7770422, "events.zip": 7770599, "players.json": 7765196}  # figshare article ids (all CC BY 4.0)
 
 
 def fetch(url: str) -> bytes:
