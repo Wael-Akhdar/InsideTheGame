@@ -6,9 +6,10 @@ from dataclasses import dataclass, field
 from typing import Optional
 
 from ..models import Event, Moment
+from . import insights
 
 WINDOW_MIN = 5.0  # rolling window for momentum / pressure
-BIG_CHANCE_XG = 0.35
+BIG_CHANCE_XG = 0.25
 
 # weight of each event type in the momentum score
 _MOMENTUM_W = {"shot": 3.0, "pass_final_third": 0.6, "pressure": 0.5, "tackle_won": 0.8, "goal": 5.0}
@@ -56,6 +57,9 @@ class MatchState:
     moments: list[Moment] = field(default_factory=list)
     minute: int = 0
     poss_time: dict[str, float] = field(default_factory=dict)
+    roster: dict[str, dict] = field(default_factory=dict)  # line-ups: player id -> {name, line}
+    insight_log: dict = field(default_factory=dict)  # cooldowns of the insight detectors
+    _last_sweep: int = -1
     _last_t: float = 0.0
     _window: deque = field(default_factory=deque)
     _momentum_hist: list[tuple[float, float]] = field(default_factory=list)  # (clock, home-away)
@@ -118,6 +122,9 @@ class MatchState:
 
         self._update_window(ev)
         new.extend(self._detect_swings(ev))
+        if ev.minute % insights.CHECK_EVERY == 0 and ev.minute != self._last_sweep and ev.type not in ("kickoff", "halftime", "fulltime"):
+            self._last_sweep = ev.minute
+            new.extend(insights.detect(self, ev.minute))
         self.moments.extend(new)
         return new
 
@@ -176,13 +183,13 @@ class MatchState:
 
     def _detect_swings(self, ev: Event) -> list[Moment]:
         out: list[Moment] = []
-        if len(self._momentum_hist) < 20 or ev.clock - self._last_swing_clock < 10:
+        if len(self._momentum_hist) < 20 or ev.clock - self._last_swing_clock < 15:
             return out
         past = [m for c, m in self._momentum_hist if ev.clock - c >= 4]
         if not past:
             return out
         before, now = past[-1], self._momentum_hist[-1][1]
-        if abs(now - before) >= 50 and abs(now) >= 25:
+        if abs(now - before) >= 55 and abs(now) >= 30:
             team = self.home if now > before else self.away
             self._last_swing_clock = ev.clock
             evid = [e.id for e in list(self._window)[-6:]]

@@ -5,6 +5,16 @@ A tactical football lab and live match intelligence engine. Coaches design a for
 
 Built for the *Inside the Game: Developer Hackathon* (Microsoft x Premier League). All data is synthetic: clubs and players are fictional.
 
+## Insights the TV does not show
+A goal is obvious on screen. GamePulse looks for what is not (`gamepulse/engine/insights.py`):
+- **Dominant, not rewarded**: a team far ahead in expected goals but level or behind.
+- **Pressing is fading**: pressing activity well below its early-match level while the opponent gains time on the ball.
+- **Key player**: one outfield player involved in a disproportionate share of his team's passing.
+- **Turning point**: how the balance of chances moved after a tactical change or a red card.
+
+Each insight cites the events that justify it. The detectors read only the event stream and the line-ups, like a real data feed,
+never the simulator's internals, so the same code can run on real matches.
+
 ## What a coach can do
 - Pick any of **75 formations** (or type your own shape), and give every player a role. Roles can be **described in plain
   language** ("stay wide, beat his man, cross early") and are translated by AI.

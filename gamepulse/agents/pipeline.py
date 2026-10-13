@@ -85,21 +85,53 @@ class ExplainerAgent(Agent):
         if m.kind == "tactic_change":
             ch = ", ".join(f"{k.replace('_', ' ')} {v if isinstance(v, str) else round(v * 100)}" for k, v in m.facts["changes"].items())
             return f"{team} change their approach ({ch}). Watch the next minutes: shape, pressing and tempo will shift."
+        if m.kind == "unlucky":
+            f = m.facts
+            return (f"{team} lead the expected goals {f['xg_for']:.1f} to {f['xg_against']:.1f} but the score is "
+                    f"{self.tname(a)} {score[a]}-{score[b]} {self.tname(b)}. The performance is there; the finishing is not rewarding it yet.")
+        if m.kind == "pressing_fade":
+            f = m.facts
+            return (f"{team}'s pressing has faded: {f['before']} pressing actions per 10 minutes early on, {f['now']} now. "
+                    f"Over the same period {self.tname(state.away if m.team == state.home else state.home)}'s pass accuracy moved from "
+                    f"{f['opp_acc_before']}% to {f['opp_acc_now']}%, so they get more time on the ball.")
+        if m.kind == "key_player":
+            f = m.facts
+            return (f"{self.pname(m.player)} is involved in {f['share']}% of {team}'s passing over the last 15 minutes "
+                    f"(a typical player: about {f['typical']}%). Cutting him off is the quickest way to disrupt {team}.")
+        if m.kind == "turning_point":
+            f = m.facts
+            return (f"Since {f['cause']} at {f['at']}', the expected-goals balance of {team} moved from {f['before']:+.1f} to "
+                    f"{f['after']:+.1f} per 10 minutes.")
         if m.kind == "injury":
             return f"{team} lose a key player's mobility - expect gaps on that side and fewer high-intensity runs."
         return "A notable moment in the match."
+
+
+    def plain(self, m: Moment, state: MatchState) -> Optional[str]:
+        """Short fan-friendly wording for the insights that need no numbers; None for the other kinds."""
+        team = self.tname(m.team)
+        f = m.facts
+        return {
+            "unlucky": f"{team} are playing better than the score says ({f.get('xg_for', 0):.1f} expected goals to {f.get('xg_against', 0):.1f}) and could be rewarded soon.",
+            "pressing_fade": f"{team} are running out of steam: they are pressing much less than earlier.",
+            "key_player": f"{self.pname(m.player)} is everywhere: {team}'s game goes through him.",
+            "turning_point": (f"The match changed at {f.get('at')}': {team} " +
+                              ("are now creating more." if f.get("after", 0) > f.get("before", 0) else "have lost their edge.")),
+        }.get(m.kind)
 
 
 class NarratorAgent(Agent):
     """Turns a moment + explanation into broadcast-ready copy in the viewer's language and mode."""
     name = "narrator"
 
-    def run(self, m: Moment, why: str, v: Viewer, state: MatchState) -> tuple[str, str]:
+    def run(self, m: Moment, why: str, v: Viewer, state: MatchState, plain: Optional[str] = None) -> tuple[str, str]:
         player, team = self.pname(m.player), self.tname(m.team)
         headline = {
             "goal": f"GOAL! {player} ({team})", "big_chance": f"Big chance for {player}!",
             "momentum_swing": f"{team} take control", "red_card": f"RED CARD - {player}",
             "tactic_change": f"{team} switch tactics", "injury": f"{player} ({team}) is hurt",
+            "unlucky": f"{team}: dominant, not rewarded", "pressing_fade": f"{team}'s pressing is fading",
+            "key_player": f"{player} runs {team}'s game", "turning_point": f"Turning point for {team}",
         }.get(m.kind, "Key moment")
         facts = f"{m.kind} at minute {m.minute} by {player} ({team}). {why}"
         if m.player and v.mode == "analyst":
@@ -108,7 +140,7 @@ class NarratorAgent(Agent):
                   f"for a {MODES[v.mode]}. Use ONLY the given facts, do not invent numbers.")
         body = self.llm.complete(system, facts)
         if body is None:
-            body = why if v.mode == "analyst" else why.split(" (")[0].split(" - ")[0].rstrip(".") + "."
+            body = why if v.mode == "analyst" else (plain or why.split(" (")[0].split(" - ")[0].rstrip(".") + ".")
         return headline, body
 
 
@@ -122,8 +154,8 @@ class PersonaAgent(Agent):
             score += 0.15
         if v.focus_player:
             score = 1.0 if m.player == v.focus_player else score * 0.5
-        if v.mode == "casual" and m.kind == "momentum_swing":
-            score -= 0.2  # casual fans want goals and chances, analysts want rhythm
+        if v.mode == "casual" and m.kind in ("momentum_swing", "pressing_fade"):
+            score -= 0.2  # casual fans want goals and chances, analysts want rhythm and pressing
         return round(min(1.0, score), 2)
 
 
@@ -133,6 +165,8 @@ class Orchestrator:
     def __init__(self, home: Team, away: Team, llm: Optional[LLM] = None):
         teams = {home.id: home, away.id: away}
         self.state = MatchState(home.id, away.id)
+        # line-ups are part of any real feed: id, name and line (GK / DF / MF / FW) of every player
+        self.state.roster = {p.id: {"name": p.name, "line": p.position} for t in (home, away) for p in t.players}
         llm = llm or LLM()
         self.explainer = ExplainerAgent(llm, teams)
         self.narrator = NarratorAgent(llm, teams)
@@ -155,6 +189,6 @@ class Orchestrator:
             if rel < threshold:
                 continue
             why = self.explainer.run(m, self.state)
-            headline, body = self.narrator.run(m, why, viewer, self.state)
+            headline, body = self.narrator.run(m, why, viewer, self.state, self.explainer.plain(m, self.state))
             overlays.append(Overlay(m.minute, m.kind, headline, body, why, m.evidence, rel, viewer.lang, viewer.mode))
         return overlays
