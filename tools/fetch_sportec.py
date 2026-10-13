@@ -7,6 +7,7 @@ never publish them. data/external/ is git-ignored.
 
     python tools/fetch_sportec.py            # first match (J03WMX)
     python tools/fetch_sportec.py J03WN1     # another match id
+    python tools/fetch_sportec.py all        # the seven matches (about 2.6 GB)
 """
 from __future__ import annotations
 
@@ -27,16 +28,16 @@ def fetch(url: str) -> bytes:
 
 
 def main() -> int:
-    match = sys.argv[1] if len(sys.argv) > 1 else "J03WMX"
+    arg = sys.argv[1] if len(sys.argv) > 1 else "J03WMX"
     meta = json.loads(fetch(API))
     lic = meta["license"]
     if lic["name"] != "CC BY" or "by/4.0" not in lic["url"]:
         print(f"unexpected licence {lic}: stopping", file=sys.stderr)
         return 1
     DEST.mkdir(parents=True, exist_ok=True)
-    files = [f for f in meta["files"] if match in f["name"]]
+    files = [f for f in meta["files"] if arg == "all" or arg in f["name"]]
     if not files:
-        print(f"no files for match {match}", file=sys.stderr)
+        print(f"no files for match {arg}", file=sys.stderr)
         return 1
     for f in files:
         out = DEST / f["name"]

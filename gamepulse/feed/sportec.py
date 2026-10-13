@@ -82,6 +82,7 @@ class SportecFeed:
         res = gen.attrib.get("Result", "0:0").split(":")
         official = {"HOM": int(res[0]), "AWY": int(res[1])}
         persons: dict[str, dict[str, Any]] = {}
+        lineups = {side[t.attrib["TeamId"]]: t.attrib.get("LineUp", "") for t in mi.iter("Team")}  # e.g. "4-2-3-1" (feed metadata)
         for t in mi.iter("Team"):
             for p in t.iter("Player"):
                 persons[p.attrib["PersonId"]] = {"team": side[t.attrib["TeamId"]], "number": int(p.attrib.get("ShirtNumber", 0)),
@@ -119,7 +120,7 @@ class SportecFeed:
                         ball[sec][n] = (x, y, m.group(4), m.group(5))
                     elif person in persons:
                         pos.setdefault((sec, person), {})[n] = (x, y)
-        self.__dict__.update(teams=(teams[0], teams[1]), official_score=official, label="Bundesliga match with tracking")
+        self.__dict__.update(teams=(teams[0], teams[1]), official_score=official, label="Bundesliga match with tracking", lineups=lineups)
         t0 = {s: _utc(v[1]) for s, v in first.items()}
         # which way does each team attack in each half? (from the keeper's mean position); mirror so that home always attacks right
         mirror = {}

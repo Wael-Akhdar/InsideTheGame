@@ -30,6 +30,39 @@ def _clamp(v: float, lo: float, hi: float) -> float:
     return lo if v < lo else hi if v > hi else v
 
 
+# Parameters of the positioning model (team shape around the ball). Fitted on real tracking data: see gamepulse/validation.py.
+SHAPE = {"ball_shift_x": 0.3, "ball_shift_y": 0.2, "lh_in": 10.0, "lh_out": 24.0, "width_base": 0.8, "width_gain": 0.35,
+         "kx_in": 0.60, "ky_in": 0.92, "kx_out": 0.55, "ky_out": 0.70, "support": 0.28,
+         "gk_base": 5.0, "gk_ball": 0.08, "ax_scale": 1.0, "off_df": 0.0, "off_mf": 0.0, "off_fw": 0.0}
+
+
+def shape_targets(S, has_ball: bool, bx: float, by: float, params: dict | None = None) -> np.ndarray:
+    """Where the 11 players of a side want to stand, in the team frame, given the ball (bx, by) and who has it.
+
+    Depends only on the formation, the roles, the instructions (line height, width, tempo, directness) and the ball:
+    this is the part of the simulator that can be compared with real tracking data frame by frame."""
+    P = params or SHAPE
+    tac = S.tac
+    lh = tac.line_height
+    if has_ball:
+        tx = S.base[:, 0] + P["ball_shift_x"] * (bx - 50) + P["ax_scale"] * S.ax * (0.6 + 0.4 * tac.tempo) + (lh - 0.5) * P["lh_in"]
+        support = P["support"] * (1 - tac.directness)  # short build-up: players close in on the ball to offer passing options
+    else:
+        tx = S.base[:, 0] + P["ball_shift_x"] * (bx - 50) + S.dx + (lh - 0.5) * P["lh_out"]
+    tx[S.gk] = P["gk_base"] + (lh - 0.5) * 8 + P["gk_ball"] * (bx - 50)
+    tx = tx + np.where(S.line == "DF", P["off_df"], np.where(S.line == "MF", P["off_mf"], np.where(S.line == "FW", P["off_fw"], 0.0)))
+    ty = 50 + (S.base[:, 1] - 50) * (P["width_base"] + P["width_gain"] * tac.width) * S.spread + P["ball_shift_y"] * (by - 50)
+    # real teams stay compact around the ball: the block shifts and squeezes with it
+    kx, ky = (P["kx_in"], P["ky_in"]) if has_ball else (P["kx_out"], P["ky_out"])
+    tx = np.where(S.gk, tx, bx + (tx - bx) * kx)
+    ty = np.where(S.gk, ty, by + (ty - by) * ky)
+    if has_ball:
+        near = ~S.gk & (S.base[:, 0] < 68)  # forwards keep their shape: they are the targets of the build-up
+        tx = np.where(near, tx + (bx - tx) * support * 0.4, tx)
+        ty = np.where(near, ty + (by - ty) * support, ty)
+    return np.stack([np.clip(tx, 3, 97), np.clip(ty, 3, 97)], axis=1)
+
+
 class _Side:
     """Per-team simulation state."""
 
@@ -42,6 +75,7 @@ class _Side:
         self.roles = roles
         self.base = np.array([[s[1], s[2]] for s in slots], float)
         self.gk = np.array([s[3] == "GK" for s in slots])
+        self.line = np.array([s[3] for s in slots])
         self.ax = np.array([r["ax"] for r in roles], float)
         self.dx = np.array([r["dx"] for r in roles], float)
         self.spread = np.array([r["spread"] for r in roles], float)
@@ -133,23 +167,7 @@ class MatchSimulator:
     def _move(self, S: _Side, has_ball: bool, dt: float):
         tac = S.tac
         bx, by = self._ball_in(S)
-        lh = tac.line_height
-        if has_ball:
-            tx = S.base[:, 0] + 0.3 * (bx - 50) + S.ax * (0.6 + 0.4 * tac.tempo) + (lh - 0.5) * 10
-            support = 0.28 * (1 - tac.directness)  # short build-up: players close in on the ball to offer passing options
-        else:
-            tx = S.base[:, 0] + 0.3 * (bx - 50) + S.dx + (lh - 0.5) * 24
-        tx[S.gk] = 5 + (lh - 0.5) * 8 + 0.08 * (bx - 50)
-        ty = 50 + (S.base[:, 1] - 50) * (0.8 + 0.35 * tac.width) * S.spread + 0.2 * (by - 50)
-        # real teams stay compact around the ball: the block shifts and squeezes with it
-        kx, ky = (0.60, 0.92) if has_ball else (0.55, 0.70)  # tracking data: in possession wide, out of possession narrow; both short
-        tx = np.where(S.gk, tx, bx + (tx - bx) * kx)
-        ty = np.where(S.gk, ty, by + (ty - by) * ky)
-        if has_ball:
-            near = ~S.gk & (S.base[:, 0] < 68)  # forwards keep their shape: they are the targets of the build-up
-            tx = np.where(near, tx + (bx - tx) * support * 0.4, tx)
-            ty = np.where(near, ty + (by - ty) * support, ty)
-        tgt = np.stack([np.clip(tx, 3, 97), np.clip(ty, 3, 97)], axis=1)
+        tgt = shape_targets(S, has_ball, bx, by)
 
         S.pressers = []
         full = np.zeros(11, bool)
