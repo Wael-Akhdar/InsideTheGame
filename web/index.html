@@ -71,7 +71,7 @@
 <!-- ====================================================== MATCH -->
 <section id="tab-match" class="tab on">
   <div class="bar">
-    <label class="f">Data source <select id="mSource"><option value="sim">Simulated match</option><option value="Spain">Real match: Spain</option><option value="Italy">Real match: Italy</option><option value="France">Real match: France</option><option value="Germany">Real match: Germany</option><option value="England">Real match: England</option></select></label>
+    <label class="f">Data source <select id="mSource"><option value="sim">Simulated match</option><option value="sportec">Real match with tracking (Bundesliga)</option><option value="Spain">Real match: Spain</option><option value="Italy">Real match: Italy</option><option value="France">Real match: France</option><option value="Germany">Real match: Germany</option><option value="England">Real match: England</option></select></label>
     <label class="f">Home tactic <select id="mHome"></select></label>
     <label class="f">Away tactic <select id="mAway"></select></label>
     <label class="f">View <select id="mMode"><option value="casual">Casual fan</option><option value="analyst">Analyst</option></select></label>
@@ -268,7 +268,7 @@ function drawPitchLines(ctx, W, H) {
 
 /* live pitch state */
 const pc = $("pitch"), pctx = pc.getContext("2d");
-let teams = null, ids = [];
+let teams = null, ids = [], playerById = {};
 let cur = null, prev = null, tStart = 0, dur = 100, lastArr = 0, shown = null;
 
 function lerpState(now) {
@@ -277,7 +277,7 @@ function lerpState(now) {
   const a = clamp((now - tStart) / dur, 0, 1);
   return { ball: [prev.ball[0] + (cur.ball[0] - prev.ball[0]) * a, prev.ball[1] + (cur.ball[1] - prev.ball[1]) * a],
            p: cur.p.map((q, i) => [prev.p[i][0] + (q[0] - prev.p[i][0]) * a, prev.p[i][1] + (q[1] - prev.p[i][1]) * a]),
-           carrier: cur.carrier, off: cur.off || [], poss: cur.poss };
+           carrier: cur.carrier, off: cur.off || [], poss: cur.poss, ids: cur.ids };
 }
 
 function drawMarkers(now) {
@@ -309,7 +309,7 @@ function renderPitch(now) {
   const s = shown = lerpState(now);
   if (s) {
     const X = x => x / 100 * W, Y = y => y / 100 * H;
-    const ci = ids.indexOf(s.carrier);
+    const ci = (s.ids || ids).indexOf(s.carrier);
     if (ci >= 0) { // pressure zone: 10 m around the carrier
       pctx.beginPath(); pctx.ellipse(X(s.p[ci][0]), Y(s.p[ci][1]), 10 / 1.05 / 100 * W, 10 / 0.68 / 100 * H, 0, 0, 7);
       pctx.fillStyle = "#ffffff18"; pctx.fill(); pctx.setLineDash([6, 5]); pctx.strokeStyle = "#ffffff77"; pctx.lineWidth = 1.5; pctx.stroke(); pctx.setLineDash([]);
@@ -320,7 +320,8 @@ function renderPitch(now) {
       pctx.beginPath(); pctx.arc(x, y, 15, 0, 7); pctx.fillStyle = home ? HOME : AWAY; pctx.fill();
       pctx.lineWidth = i === ci ? 4 : 2; pctx.strokeStyle = i === ci ? "#fff" : "#12001f"; pctx.stroke();
       pctx.fillStyle = home ? "#12001f" : "#fff"; pctx.font = "bold 14px system-ui"; pctx.textAlign = "center"; pctx.textBaseline = "middle";
-      pctx.fillText(teams ? (home ? teams.home : teams.away).players[i % 11].number : "", x, y + 1);
+      const pl = s.ids ? playerById[s.ids[i]] : teams && (home ? teams.home : teams.away).players[i % 11];
+      pctx.fillText(pl ? pl.number : "", x, y + 1);
     });
     pctx.beginPath(); pctx.arc(X(s.ball[0]), Y(s.ball[1]), 7, 0, 7); pctx.fillStyle = "#fff"; pctx.fill(); pctx.lineWidth = 2; pctx.strokeStyle = "#000"; pctx.stroke();
   }
@@ -335,9 +336,10 @@ pc.onmousemove = e => {
   let best = -1, bd = 3.2;
   shown.p.forEach((q, i) => { const d = Math.hypot((q[0] - mx) * 1.05, (q[1] - my) * 0.68) / 0.7; if (d < bd) { bd = d; best = i; } });
   if (best < 0) { tip.style.display = "none"; return; }
-  const t = best < 11 ? teams.home : teams.away, p = t.players[best % 11];
-  const role = (t.tactic.custom_roles || {})[p.role] || catalog.roles[p.role] || {};
-  tip.innerHTML = `<b>#${p.number} ${p.name}</b><br>${p.slot} · ${role.label || p.role}`;
+  const t = best < 11 ? teams.home : teams.away, p = shown.ids ? playerById[shown.ids[best]] : t.players[best % 11];
+  if (!p) { tip.style.display = "none"; return; }
+  const role = t.tactic ? ((t.tactic.custom_roles || {})[p.role] || catalog.roles[p.role] || {}) : {};
+  tip.innerHTML = `<b>#${p.number} ${p.name}</b><br>${p.slot ? p.slot + " · " : ""}${role.label || p.role || p.line}`;
   tip.style.left = e.clientX + 14 + "px"; tip.style.top = e.clientY + 10 + "px"; tip.style.display = "block";
 };
 pc.onmouseleave = () => $("tip").style.display = "none";
@@ -396,7 +398,7 @@ const control = async body => { if (!es || !curSid) return null; try { return aw
 $("stop").onclick = () => { if (es) es.close(); es = null; };
 $("pause").onclick = () => { paused = !paused; $("pause").textContent = paused ? "Resume" : "Pause"; control({ paused }); };
 $("mSpeed").onchange = () => control({ speed: +$("mSpeed").value });
-$("mSource").onchange = () => { const real = $("mSource").value !== "sim"; $("mSeedLbl").textContent = real ? "Match #" : "Seed"; $("mSeed").value = real ? "5" : "42"; };
+$("mSource").onchange = () => { const real = $("mSource").value !== "sim"; $("mSeedLbl").textContent = real ? "Match #" : "Seed"; $("mSeed").value = real ? ($("mSource").value === "sportec" ? "0" : "5") : "42"; };
 
 $("go").onclick = () => {
   if (es) es.close();
@@ -405,19 +407,22 @@ $("go").onclick = () => {
   const q = new URLSearchParams({ home: tacticParam(selVal($("mHome"))), away: tacticParam(selVal($("mAway"))), mode: $("mMode").value,
                                   lang: $("mLang").value, speed: $("mSpeed").value, seed: parseInt($("mSeed").value) || 42, sid: curSid });
   const sc = currentScenario("mScn", mScn); if (sc) q.set("scenario", JSON.stringify(sc));
-  const src = $("mSource").value; if (src !== "sim") { q.set("source", "wyscout"); q.set("league", src); }
+  const src = $("mSource").value; if (src === "sportec") q.set("source", "sportec"); else if (src !== "sim") { q.set("source", "wyscout"); q.set("league", src); }
   markers = [];
   es = new EventSource("/api/match/stream?" + q);
   es.addEventListener("meta", e => {
     teams = JSON.parse(e.data);
     ids = [...teams.home.players, ...teams.away.players].map(p => p.id);
+    playerById = Object.fromEntries([...teams.home.players, ...teams.away.players].map(p => [p.id, p]));
     $("hn").textContent = teams.home.name; $("an").textContent = teams.away.name;
     $("ht").textContent = teams.home.tactic ? teams.home.tactic.name : ""; $("at").textContent = teams.away.tactic ? teams.away.tactic.name : "";
     liveTac = { home: teams.home.tactic ? { ...teams.home.tactic } : null, away: teams.away.tactic ? { ...teams.away.tactic } : null }; buildLiveCoach();
     $("legendNote").textContent = teams.source === "wyscout"
       ? `Real match (${teams.label}), pseudonymised. Events only, so no player positions. Data: Pappalardo et al. 2019, Wyscout public dataset, CC BY 4.0.`
+      : teams.source === "sportec"
+      ? "Real match with player tracking (2 s steps), pseudonymised. Data: Bassek et al. 2025, Sportec Open DFL dataset, CC BY 4.0, released with the authorization of the DFL."
       : "○ pressure zone around the ball carrier · hover a player for details";
-    if (teams.source === "wyscout") chips($("lcOut"), ["Live coaching and scenarios only apply to simulated matches."]);
+    if (teams.source !== "sim") chips($("lcOut"), ["Live coaching and scenarios only apply to simulated matches."]);
   });
   es.addEventListener("end", () => { es.close(); es = null; });
   es.onmessage = e => {
@@ -595,6 +600,7 @@ fetch("/api/catalog").then(r => r.json()).then(c => {
   newEd(c.presets.find(t => t.name === "Balanced 4-3-3"));
   if (location.hash === "#tactics") document.querySelector("[data-tab=tactics]").click();
   if (location.hash === "#lab") { document.querySelector("[data-tab=lab]").click(); $("lRun").click(); }
+  if (location.hash === "#tracking") { $("mSource").value = "sportec"; $("mSource").onchange(); $("mSpeed").value = "150"; $("go").click(); }
   if (location.hash === "#real") { $("mSource").value = "Italy"; $("mSource").onchange(); $("mSeed").value = "40"; $("mSpeed").value = "400"; $("go").click(); }
   if (location.hash === "#demo") { $("mSpeed").value = "150"; $("go").click(); }
 });

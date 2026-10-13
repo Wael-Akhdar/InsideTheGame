@@ -13,6 +13,9 @@ trademark issues". That covers the hackathon rules only: each dataset's own lice
 | Wyscout public soccer event dataset (Pappalardo et al., 2019) | 1,941 matches, 3.25 M events, 7 competitions, 2017/18 | CC BY 4.0 (figshare records 7770422 and 7770599, `license` field) | Credit the paper; no endorsement implied |
 | Sportec Open DFL dataset (Bassek, Rein, Weber, Memmert, 2025) | 7 German Bundesliga / 2. Bundesliga matches, 25 Hz positions of every player and the ball, events | CC BY 4.0 "with the authorization from the DFL" (paper, Data Records; figshare record 28196177, `license` field) | Credit the paper and DFL; match files contain real player and team names, so never publish them (aggregates only); no DFL or club logos |
 
+Both datasets are also streamed through the pipeline as pseudonymised matches (`WyscoutFeed`, `SportecFeed`): the files stay in `data/external/`,
+nothing raw is published, the UI shows "Home Team / Home #7" only.
+
 Attribution text to use in the README and pitch:
 - "Calibrated with the public Wyscout event dataset: Pappalardo et al. (2019), A public data set of spatio-temporal match events in soccer competitions, Scientific Data 6:236 (CC BY 4.0)."
 - "Movement calibrated with the Sportec Open DFL dataset: Bassek et al. (2025), An integrated dataset of spatiotemporal and event data in elite soccer, Scientific Data (CC BY 4.0, released with the authorization of the DFL)."

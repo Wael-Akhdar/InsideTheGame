@@ -26,6 +26,11 @@ deployable on a real feed, and it is checked by code (`gamepulse/feed/contract.p
 A feed may omit any event type it cannot provide: detectors that need it simply stay silent (for example a feed without
 `pressure` events gets no pressing insight based on them). Anything not listed here must not be needed by the pipeline.
 
+## Frames (optional)
+`frame` = `{"t", "minute", "poss", "ball": [x, y], "carrier": player id, "p": [[x, y] x 22], "ids": [22 player ids], "off": [empty slots]}`.
+Positions use the **global** frame (home attacks to the right, 0-100 on both axes), unlike events which use the acting team's frame.
+`ids` lets a frame list whoever is on the pitch (substitutions); the simulator omits it and keeps a fixed order (11 home, then 11 away).
+
 ## Checking a feed
 ```python
 from gamepulse.feed import validate_stream
@@ -39,6 +44,12 @@ Writing this check found a bug in our own simulator (the half-time tick reset th
 |---|---|---|
 | `SimulatorFeed` | our tactical simulator | everything, plus player positions in `frame.p` |
 | `WyscoutFeed` | public Wyscout event dataset (Pappalardo et al., 2019, CC BY 4.0) | real matches, events only |
+| `SportecFeed` | Sportec Open DFL dataset (Bassek et al., 2025, CC BY 4.0, with the authorization of the DFL) | a real Bundesliga match: events and the positions of all 22 players and the ball (frames every 2 s), the provider's own xG |
+
+### How Sportec events are mapped
+`Play` -> `pass` (receiver and end point from the next action), `ShotAtGoal` and `Penalty` -> `shot` (+ `goal`, with the provider's xG),
+`TacklingGame` -> `tackle` for the player without the ball, `Foul` -> `foul`, `Caution` -> `card`, `BallClaiming` and team changes ->
+`possession_change`. Coordinates are mirrored per half so that the home team always attacks to the right.
 
 ### How Wyscout events are mapped
 | Wyscout | Contract |

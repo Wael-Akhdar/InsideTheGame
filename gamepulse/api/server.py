@@ -15,6 +15,8 @@ from ..agents.pipeline import Orchestrator, Viewer
 from ..lab import evaluate, what_if
 from ..scenario import PRESET_SCENARIOS, describe_rule, sanitize
 from ..feed import SimulatorFeed
+from ..feed.sportec import DataMissing as SportecMissing
+from ..feed.sportec import SportecFeed
 from ..feed.wyscout import LEAGUES, DataMissing, WyscoutFeed, list_matches
 from ..simulator.match import MatchSimulator
 from ..tactics import PRESETS, describe_catalog, get_formation, resolve_tactic
@@ -92,7 +94,12 @@ async def stream(seed: int = 42, speed: float = 60.0, mode: str = "casual", lang
             scn = sanitize(json.loads(scenario))
         except json.JSONDecodeError:
             scn = None
-    if source == "wyscout":  # a real match: events only, pseudonymised, same pipeline
+    if source == "sportec":  # a real match with tracking: events and all player positions, pseudonymised
+        try:
+            feed = await run_in_threadpool(SportecFeed, None, seed)
+        except SportecMissing as e:
+            raise HTTPException(404, str(e))
+    elif source == "wyscout":  # a real match: events only, pseudonymised, same pipeline
         if league not in LEAGUES:
             raise HTTPException(404, f"league must be one of {LEAGUES}")
         try:
