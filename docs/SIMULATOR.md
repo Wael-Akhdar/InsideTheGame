@@ -42,7 +42,14 @@ mean pass length, forward-pass share, shots, goals, shot conversion and fouls ar
 Early versions were off on pass length (33 m vs 20 m real), pass volume, accuracy and fouls (4.5 vs 13.8); fixing that meant
 making teams compact around the ball and slowing the pace of play, then re-balancing shots and tackles.
 
-Reproduce: `python tools/fetch_wyscout.py && python -m gamepulse.calibration`. The raw data stays in `data/external/` (git-ignored).
+Team shape is checked against real tracking data (Sportec Open DFL, one Bundesliga match, 25 Hz), see [MOVEMENT.md](MOVEMENT.md):
+team depth, width, compactness, distance between teammates and distance to the ball are within a few metres of the real values
+in and out of possession (for example depth 36.5 m vs 35.9 m in possession, 34.1 m vs 32.9 m out of possession). Before the
+fix the simulated teams were 45 m deep against 33-36 m in reality. This is one match with both teams in a 4-2-3-1, so it is a
+check on orders of magnitude, not a benchmark.
+
+Reproduce: `python tools/fetch_wyscout.py && python -m gamepulse.calibration` and
+`python tools/fetch_sportec.py && python -m gamepulse.movement`. Raw data stays in `data/external/` (git-ignored).
 
 ## What is still not realistic
 - **Possession still converts a little too weakly against a balanced side.** Possession 4-3-3 holds about 59% of the ball
@@ -51,9 +58,11 @@ Reproduce: `python tools/fetch_wyscout.py && python -m gamepulse.calibration`. T
 - Possession and territory gaps are calibrated to be plausible, not fitted to real data, so absolute values (for example
   62%) should not be quoted as findings about real teams.
 - No set pieces, offsides, throw-ins, substitutions, weather or crowd effects. Every player attribute is generated.
-- Pass accuracy by length is flatter than real: short passes are too safe (88% vs 82%) and very long passes too good (53% vs 45%).
-- Style bands: the possession preset matches the real high-possession teams on pass share and accuracy, but plays fewer forward
-  passes (39% vs 45%) and creates fewer shots (9 vs 13). Real high-possession teams are also better teams, so this is not a like-for-like comparison.
+- Pass accuracy by length is flatter than real: short passes are too safe (88% vs 82%) and very long passes (50 m and more) far too
+  good (about 69% vs 45%).
+- Style bands: the possession preset matches the real high-possession teams on accuracy (85% vs 87%) but takes less of the ball
+  (56% of the passes vs 59%), plays fewer forward passes (37% vs 45%) and creates fewer shots (7.5 vs 13.5), even fewer than the
+  direct preset (8.2). Real high-possession teams are also better teams, so this is not a like-for-like comparison.
 - The preset matchups are not a rock-paper-scissors table backed by evidence. Treat the Lab as a way to compare
   *your* tactics under the same model, and as a source of hypotheses, not as predictions.
 

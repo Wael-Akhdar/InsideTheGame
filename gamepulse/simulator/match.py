@@ -142,8 +142,9 @@ class MatchSimulator:
         tx[S.gk] = 5 + (lh - 0.5) * 8 + 0.08 * (bx - 50)
         ty = 50 + (S.base[:, 1] - 50) * (0.8 + 0.35 * tac.width) * S.spread + 0.2 * (by - 50)
         # real teams stay compact around the ball: the block shifts and squeezes with it
-        tx = np.where(S.gk, tx, bx + (tx - bx) * 0.72)
-        ty = np.where(S.gk, ty, by + (ty - by) * 0.78)
+        kx, ky = (0.60, 0.92) if has_ball else (0.55, 0.70)  # tracking data: in possession wide, out of possession narrow; both short
+        tx = np.where(S.gk, tx, bx + (tx - bx) * kx)
+        ty = np.where(S.gk, ty, by + (ty - by) * ky)
         if has_ball:
             near = ~S.gk & (S.base[:, 0] < 68)  # forwards keep their shape: they are the targets of the build-up
             tx = np.where(near, tx + (bx - tx) * support * 0.4, tx)
@@ -226,7 +227,7 @@ class MatchSimulator:
         fx, fy = float(me[0]), float(me[1])
         in_box = fx > 84 and abs(fy - 50) < 24
         zone = 1.6 if in_box else (0.95 if fx > 70 else 0.0)
-        shoot_p = 0.040 * (0.5 + 0.5 * role["sh"]) * zone * (0.7 + 0.3 * P.attr(c, "shooting") / 70)
+        shoot_p = 0.052 * (0.5 + 0.5 * role["sh"]) * zone * (0.7 + 0.3 * P.attr(c, "shooting") / 70)
         drib_p = 0.07 * role["dr"] * (P.attr(c, "dribbling") / 70) * (1.4 if dmin < 9 else 0.7)
         # patient teams also move the ball forward by carrying it into open space (safe territorial gain)
         ahead = opp[opp[:, 0] > fx - 2]
@@ -332,7 +333,7 @@ class MatchSimulator:
         finishing = P.attr(c, "shooting") / 70
         keeper = D.attr(0, "keeping") / 75
         roll = rng.random()
-        if roll < xg * finishing / keeper * 0.9:
+        if roll < xg * finishing / keeper * 1.18:
             outcome = "goal"
         else:
             r2 = rng.random()
