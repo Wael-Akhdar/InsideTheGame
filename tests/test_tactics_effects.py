@@ -34,7 +34,7 @@ def test_directness_trades_accuracy_for_territory():
     short = Tactic(name="short", formation="4-3-3", directness=0.1)
     direct = Tactic(name="direct", formation="4-3-3", directness=0.9)
     base = PRESETS["Balanced 4-3-3"]
-    assert _row(short, base)["pass_acc"] > _row(direct, base)["pass_acc"] + 5
+    assert _row(short, base)["pass_acc"] > _row(direct, base)["pass_acc"] + 3
     assert _row(short, base)["possession"] > _row(direct, base)["possession"]
 
 

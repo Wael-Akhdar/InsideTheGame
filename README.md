@@ -12,6 +12,8 @@ Built for the *Inside the Game: Developer Hackathon* (Microsoft x Premier League
 - **Coach live**: change speed, pause, switch tactics or inject events while the match runs.
 - **What-if**: compare a tactic with and without a scenario over many matches (same seeds, so differences come from the change).
 
+Simulator realism is checked against real match statistics (`docs/CALIBRATION.md`; data: Pappalardo et al. 2019, CC BY 4.0).
+
 See `docs/ROADMAP.md` for the vision, ideas (replaying real matches, scouting, set pieces...) and what the rules allow regarding video.
 
 ## Three modes

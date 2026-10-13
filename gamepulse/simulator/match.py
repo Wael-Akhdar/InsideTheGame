@@ -141,6 +141,9 @@ class MatchSimulator:
             tx = S.base[:, 0] + 0.3 * (bx - 50) + S.dx + (lh - 0.5) * 24
         tx[S.gk] = 5 + (lh - 0.5) * 8 + 0.08 * (bx - 50)
         ty = 50 + (S.base[:, 1] - 50) * (0.8 + 0.35 * tac.width) * S.spread + 0.2 * (by - 50)
+        # real teams stay compact around the ball: the block shifts and squeezes with it
+        tx = np.where(S.gk, tx, bx + (tx - bx) * 0.72)
+        ty = np.where(S.gk, ty, by + (ty - by) * 0.78)
         if has_ball:
             near = ~S.gk & (S.base[:, 0] < 68)  # forwards keep their shape: they are the targets of the build-up
             tx = np.where(near, tx + (bx - tx) * support * 0.4, tx)
@@ -203,8 +206,14 @@ class MatchSimulator:
 
         # ---- tackle attempt by the closest defender
         if dmin < 3.5:
-            p_try = 0.03 + 0.08 * D.tac.pressing * D.fat
+            p_try = 0.05 + 0.12 * D.tac.pressing * D.fat
             if rng.random() < p_try:
+                if rng.random() < 0.27 * (0.6 + 0.8 * D.tac.pressing):  # a late or mistimed challenge: free kick, play stops
+                    evs.append(self._ev(t, "foul", D.id, player=D.team.players[j].id, x=float(D.pos[j, 0]), y=float(D.pos[j, 1])))
+                    if rng.random() < 0.012 * (0.6 + D.tac.pressing) and not D.gk[j]:
+                        D.active[j] = False
+                        evs.append(self._ev(t, "card", D.id, player=D.team.players[j].id, outcome="red"))
+                    return
                 tk = D.attr(j, "tackling")
                 won = rng.random() < _clamp(0.42 + (tk - P.attr(c, "dribbling")) / 200, 0.15, 0.75)
                 evs.append(self._ev(t, "tackle", D.id, player=D.team.players[j].id, x=float(D.pos[j, 0]), y=float(D.pos[j, 1]),
@@ -212,18 +221,12 @@ class MatchSimulator:
                 if won:
                     self._turnover(D, j, t, evs, "tackle")
                     return
-                if rng.random() < 0.18 * (0.5 + D.tac.pressing):
-                    evs.append(self._ev(t, "foul", D.id, player=D.team.players[j].id, x=float(D.pos[j, 0]), y=float(D.pos[j, 1])))
-                    if rng.random() < 0.004 * (0.6 + D.tac.pressing) and not D.gk[j]:
-                        D.active[j] = False
-                        evs.append(self._ev(t, "card", D.id, player=D.team.players[j].id, outcome="red"))
-                    return
 
         # ---- choose action
         fx, fy = float(me[0]), float(me[1])
         in_box = fx > 84 and abs(fy - 50) < 24
         zone = 1.6 if in_box else (0.95 if fx > 70 else 0.0)
-        shoot_p = 0.023 * (0.5 + 0.5 * role["sh"]) * zone * (0.7 + 0.3 * P.attr(c, "shooting") / 70)
+        shoot_p = 0.040 * (0.5 + 0.5 * role["sh"]) * zone * (0.7 + 0.3 * P.attr(c, "shooting") / 70)
         drib_p = 0.07 * role["dr"] * (P.attr(c, "dribbling") / 70) * (1.4 if dmin < 9 else 0.7)
         # patient teams also move the ball forward by carrying it into open space (safe territorial gain)
         ahead = opp[opp[:, 0] > fx - 2]
@@ -280,9 +283,9 @@ class MatchSimulator:
             if dm < 4:
                 continue
             open_r = min(14.0, float(self._dists_m(rp, opp).min()))
-            w_dir = 0.8 + 1.4 * directness + 1.2 * role["fw"]
-            w = math.exp(fwd / 22 * w_dir) * (0.35 + open_r / 14) ** (1 + 2.2 * (1 - directness))  # patient teams only find the free man
-            w *= math.exp(-dm / (7 + 30 * directness + P.attr(c, "vision") / 10))
+            w_dir = 0.9 + 1.0 * directness + 1.2 * role["fw"]
+            w = math.exp(fwd / 22 * w_dir) * (0.35 + open_r / 14) ** (1 + 0.8 * (1 - directness))  # patient teams only find the free man
+            w *= math.exp(-dm / (6 + 16 * directness + P.attr(c, "vision") / 12))
             if fwd < 0:  # recycling the ball is what patient teams do under pressure
                 w *= 1 + 2.0 * (1 - directness) * max(0.0, min(pressure, 2.0) - 0.3)
             if fwd > 0:
@@ -292,12 +295,12 @@ class MatchSimulator:
         if not cands:
             return
         # direct teams (and anyone under pressure) hit long balls: big territorial gain, but they are often lost
-        if rng.random() < 0.03 + 0.30 * directness + 0.06 * min(pressure, 2.0) * directness:
+        if rng.random() < 0.01 + 0.14 * directness + 0.04 * min(pressure, 2.0) * directness:
             longs = [(k, w) for k, w in zip(cands, weights) if k[1] > 12 and k[2] >= 25]
             if longs:
                 cands, weights = [k for k, _ in longs], [w for _, w in longs]
         i, fwd, dm, open_r = rng.choices(cands, weights=weights)[0]
-        p = (1.19 - 0.10 * (P.tac.tempo - 0.5) - 0.0078 * dm * (1.2 - P.attr(c, "vision") / 150) - 0.11 * min(pressure * (0.6 + 0.8 * D.tac.pressing), 2.0)
+        p = (1.19 - 0.10 * (P.tac.tempo - 0.5) - 0.0066 * dm * (1.2 - P.attr(c, "vision") / 150) - 0.11 * min(pressure * (0.6 + 0.8 * D.tac.pressing), 2.0)
              - 0.17 * (1 - open_r / 14) + (P.attr(c, "passing") - 70) / 250
              - 0.15 * max(0.0, fwd) / 40 * (1 - max(0.0, role["sf"])) + 0.04 * self._numeric(P, D))
         ok = rng.random() < _clamp(p, 0.3, 0.97)
@@ -329,7 +332,7 @@ class MatchSimulator:
         finishing = P.attr(c, "shooting") / 70
         keeper = D.attr(0, "keeping") / 75
         roll = rng.random()
-        if roll < xg * finishing / keeper * 0.8:
+        if roll < xg * finishing / keeper * 0.9:
             outcome = "goal"
         else:
             r2 = rng.random()
@@ -466,7 +469,7 @@ class MatchSimulator:
                 yield Tick(t, self._frame(t), [self._ev(t, "halftime", self.away.id)])
                 continue
             tempo = self.sides[self.poss].tac.tempo
-            dt = (5.5 - 3.0 * tempo) * rng.uniform(0.8, 1.2)
+            dt = (7.6 - 4.2 * tempo) * rng.uniform(0.8, 1.2)
             t += dt
             evs: list[Event] = []
             self._apply_rules(t, evs)

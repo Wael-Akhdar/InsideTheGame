@@ -35,6 +35,15 @@ forward-pass preference was flattened and patient teams now also carry the ball 
 `tests/test_tactics_effects.py` guards this: possession style must keep the ball against a low block, a mirror match must
 stay balanced, directness must trade accuracy for territory, and pressing must lower the opponent's freedom (PPDA).
 
+## Calibration against real matches
+The simulator is compared with 2,892 real team-matches (Wyscout public dataset, CC BY 4.0; France, Germany, Italy and Spain,
+2017/18). Full table in [CALIBRATION.md](CALIBRATION.md). With the default balanced tactics, passes per match, pass accuracy,
+mean pass length, forward-pass share, shots, goals, shot conversion and fouls are all within tolerance of the real values.
+Early versions were off on pass length (33 m vs 20 m real), pass volume, accuracy and fouls (4.5 vs 13.8); fixing that meant
+making teams compact around the ball and slowing the pace of play, then re-balancing shots and tackles.
+
+Reproduce: `python tools/fetch_wyscout.py && python -m gamepulse.calibration`. The raw data stays in `data/external/` (git-ignored).
+
 ## What is still not realistic
 - **Possession still converts a little too weakly against a balanced side.** Possession 4-3-3 holds about 59% of the ball
   against Balanced 4-3-3 but creates less xG (about 0.8 vs 1.0). Some of this is real (a high line is exposed to counters),
@@ -42,12 +51,14 @@ stay balanced, directness must trade accuracy for territory, and pressing must l
 - Possession and territory gaps are calibrated to be plausible, not fitted to real data, so absolute values (for example
   62%) should not be quoted as findings about real teams.
 - No set pieces, offsides, throw-ins, substitutions, weather or crowd effects. Every player attribute is generated.
-- Shots per team average about 12.7 per match (real top-flight: about 12 to 13); goals about 1.2 per team (a little low).
+- Pass accuracy by length is flatter than real: short passes are too safe (88% vs 82%) and very long passes too good (53% vs 45%).
+- Style bands: the possession preset matches the real high-possession teams on pass share and accuracy, but plays fewer forward
+  passes (39% vs 45%) and creates fewer shots (9 vs 13). Real high-possession teams are also better teams, so this is not a like-for-like comparison.
 - The preset matchups are not a rock-paper-scissors table backed by evidence. Treat the Lab as a way to compare
   *your* tactics under the same model, and as a source of hypotheses, not as predictions.
 
 ## How to validate further
 1. Compare simulated distributions with published team-level aggregates (possession vs shots, PPDA vs turnovers by zone).
 2. Add monotonic tests for every instruction (already done for possession, directness, pressing; line height and width are next).
-3. Import real tracking or event data as JSON (the simulator already exports the same format) and fit the few coefficients
-   that matter most. See docs/ROADMAP.md for the rules around real data and video.
+3. Compare movement (team width, depth, speed) with open tracking data: Sportec Open DFL (7 matches, CC BY 4.0) and SkillCorner
+   Open Data (10 matches, MIT). See docs/ROADMAP.md for the rules around real data and video.
