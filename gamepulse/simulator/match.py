@@ -36,6 +36,25 @@ SHAPE = {"ball_shift_x": 0.3, "ball_shift_y": 0.2, "lh_in": 10.0, "lh_out": 24.0
          "gk_base": 5.0, "gk_ball": 0.08, "ax_scale": 1.0, "off_df": 0.0, "off_mf": 0.0, "off_fw": 0.0}
 
 
+PASS = {"wide": 8.0, "dir_base": 1.875, "lateral": 0.9, "fw_back": 0.5, "back": 0.469, "dist_scale": 0.7, "acc_len": 1.0, "rw_gk": 1.0, "rw_df": 1.5, "rw_mf": 1.0,
+        "rw_fw": 0.25, "own_keep": 7.5, "fin_back": 0.3}  # receiver weights, see _pass
+LEN_X = [0, 5, 15, 25, 35, 45, 60]
+LEN_ADJ = [0.0, -0.05, 0.05, 0.06, 0.04, -0.03, -0.23]
+def _third(x: float) -> int:
+    return 0 if x < 33.3 else 1 if x < 66.7 else 2
+
+
+# Pass accuracy adjustment by (third the pass starts in, third it ends in), team frame: backward and sideways passes are safe, passes into the final third are not
+ACC_TABLE = [[0.02, 0.04, 0.0], [0.08, 0.06, -0.10], [0.12, 0.09, -0.15]]
+
+
+SHOT = {"p": 0.065, "box_near": 3.4}  # shooting propensity: base rate and the factor inside the box up to the six-yard line
+TACKLE = 1.0  # scale of the tackle attempts by the closest defender
+CARRY = 1.0  # scale of the share of actions where the carrier runs with the ball
+REGAIN = {"go_to_ball": True}
+CLEAR = {"p": 0.0, "x": 30.0, "win": 0.45}  # clearances: under pressure in its own third a team hoofs the ball long and the second ball is contested
+
+
 def shape_targets(S, has_ball: bool, bx: float, by: float, params: dict | None = None) -> np.ndarray:
     """Where the 11 players of a side want to stand, in the team frame, given the ball (bx, by) and who has it.
 
@@ -225,7 +244,7 @@ class MatchSimulator:
 
         # ---- tackle attempt by the closest defender
         if dmin < 3.5:
-            p_try = 0.05 + 0.12 * D.tac.pressing * D.fat
+            p_try = TACKLE * (0.05 + 0.12 * D.tac.pressing * D.fat)
             if rng.random() < p_try:
                 if rng.random() < 0.27 * (0.6 + 0.8 * D.tac.pressing):  # a late or mistimed challenge: free kick, play stops
                     evs.append(self._ev(t, "foul", D.id, player=D.team.players[j].id, x=float(D.pos[j, 0]), y=float(D.pos[j, 1])))
@@ -245,13 +264,13 @@ class MatchSimulator:
         fx, fy = float(me[0]), float(me[1])
         in_box = fx > 84 and abs(fy - 50) < 24
         central = abs(fy - 50) < 22
-        zone = (1.7 if in_box else 1.0 if (fx > 76 and central) else 0.5 if fx > 76 else 0.2 if fx > 66 else 0.0)
-        shoot_p = 0.080 * (0.5 + 0.5 * role["sh"]) * zone * (0.7 + 0.3 * P.attr(c, "shooting") / 70)
+        zone = (SHOT["box_near"] if in_box and fx < 92 else 1.7 if in_box else 1.0 if (fx > 76 and central) else 0.5 if fx > 76 else 0.2 if fx > 66 else 0.0)
+        shoot_p = SHOT["p"] * (0.5 + 0.5 * role["sh"]) * zone * (0.7 + 0.3 * P.attr(c, "shooting") / 70)
         drib_p = 0.07 * role["dr"] * (P.attr(c, "dribbling") / 70) * (1.4 if dmin < 9 else 0.7)
         # patient teams also move the ball forward by carrying it into open space (safe territorial gain)
         ahead = opp[opp[:, 0] > fx - 2]
         space = float(self._dists_m(me, ahead).min()) if len(ahead) else 40.0
-        carry_p = (0.26 * (1 - P.tac.directness) + 0.03) * (1.0 if space > 6.5 else 0.0) * (0.0 if P.gk[c] or fx > 82 else 1.0)
+        carry_p = CARRY * (0.26 * (1 - P.tac.directness) + 0.03) * (1.0 if space > 6.5 else 0.0) * (0.0 if P.gk[c] or fx > 82 else 1.0)
         r = rng.random()
         if r < shoot_p:
             self._shoot(P, D, t, evs, pressure)
@@ -293,6 +312,8 @@ class MatchSimulator:
         me = P.pos[c]
         role = P.roles[c]
         directness = P.tac.directness
+        if me[0] < CLEAR["x"] and not P.gk[c] and rng.random() < CLEAR["p"] * min(pressure, 2.0) * (0.5 + directness):
+            return self._clear(P, D, t, evs, opp)
         cands, weights = [], []
         for i in range(11):
             if i == c or not P.active[i]:
@@ -303,13 +324,25 @@ class MatchSimulator:
             if dm < 4:
                 continue
             open_r = min(14.0, float(self._dists_m(rp, opp).min()))
-            w_dir = 0.9 + 1.0 * directness + 1.2 * role["fw"]
+            w_dir = PASS["dir_base"] + 1.0 * directness + 1.2 * role["fw"]
             w = math.exp(fwd / 22 * w_dir) * (0.35 + open_r / 14) ** (1 + 0.8 * (1 - directness))  # patient teams only find the free man
-            w *= math.exp(-dm / (5 + 14 * directness + P.attr(c, "vision") / 12))
+            w *= math.exp(-dm / (PASS["dist_scale"] * (5 + 14 * directness + P.attr(c, "vision") / 12)))
             if fwd < 0:  # recycling the ball is what patient teams do under pressure
                 w *= 1 + 2.0 * (1 - directness) * max(0.0, min(pressure, 2.0) - 0.3)
             if fwd > 0:
                 w *= 1 - 0.5 * max(0.0, role["sf"])
+            w *= 1 + PASS["wide"] * abs(float(rp[1]) - 50) / 50  # real passes are spread over the full width of the pitch
+            if abs(fwd) <= 5:
+                w *= PASS["lateral"]  # sideways passes keep the ball moving across the pitch
+            if fwd < -5 and P.line[c] == "FW":
+                w *= PASS["fw_back"]  # forwards lay the ball off less than midfielders recycle it
+            w *= PASS["rw_" + P.team.players[i].position.lower()]  # how often each line is the target of a pass
+            if fwd < -5:
+                w *= PASS["back"] ** (0.2 + 1.6 * directness)  # backward passes: patient teams recycle, direct teams hardly ever go back
+            if me[0] < 33.3 and rp[0] < 33.3:
+                w *= PASS["own_keep"] ** (1.8 - 1.6 * directness)  # the back line circulates the ball before it progresses (patient teams more)
+            if me[0] > 66.7 and rp[0] < 66.7:
+                w *= PASS["fin_back"] ** (0.2 + 1.6 * directness)  # attackers rarely give the ball back out of the final third
             cands.append((i, fwd, dm, open_r))
             weights.append(w)
         if not cands:
@@ -323,6 +356,8 @@ class MatchSimulator:
         p = (1.19 - 0.10 * (P.tac.tempo - 0.5) - 0.0066 * dm * (1.2 - P.attr(c, "vision") / 150) - 0.11 * min(pressure * (0.6 + 0.8 * D.tac.pressing), 2.0)
              - 0.17 * (1 - open_r / 14) + (P.attr(c, "passing") - 70) / 250
              - 0.15 * max(0.0, fwd) / 40 * (1 - max(0.0, role["sf"])) + 0.04 * self._numeric(P, D))
+        p += PASS["acc_len"] * float(np.interp(dm, LEN_X, LEN_ADJ))  # real accuracy by pass length: safest at 10-30 m, long balls often lost
+        p += ACC_TABLE[_third(float(me[0]))][_third(float(P.pos[i, 0]))]  # real accuracy by (third the pass starts in, third it ends in)
         ok = rng.random() < _clamp(p, 0.3, 0.97)
         rp = P.pos[i]
         ev = self._ev(t, "pass", P.id, player=P.team.players[c].id, x=float(me[0]), y=float(me[1]),
@@ -337,7 +372,30 @@ class MatchSimulator:
         else:
             dd = self._dists_m(rp, opp)
             j = int(np.argmin(dd))
+            if REGAIN["go_to_ball"]:
+                D.pos[j] = np.clip(100.0 - rp + self.nprng.normal(0, 1.5, 2), 1.0, 99.0)  # the defender goes and wins the ball where it lands
             self._turnover(D, j, t, evs, "interception")
+
+    def _clear(self, P: _Side, D: _Side, t: float, evs: list[Event], opp: np.ndarray):
+        """A long clearance: the ball lands 30-50 units upfield and whoever is closer to the second ball may win it."""
+        rng, c = self.rng, self.c
+        me = P.pos[c]
+        land = np.array([min(92.0, me[0] + rng.uniform(30, 50)), _clamp(float(me[1]) + rng.uniform(-28, 28), 4, 96)])
+        mine = [i for i in range(11) if P.active[i] and not P.gk[i] and i != c]
+        mate = min(mine, key=lambda i: float(np.hypot(*((P.pos[i] - land) * [KX, KY])))) if mine else c
+        dm = math.hypot((land[0] - me[0]) * KX, (land[1] - me[1]) * KY)
+        ok = rng.random() < _clamp(CLEAR["win"] + 0.04 * self._numeric(P, D), 0.2, 0.7)
+        evs.append(self._ev(t, "pass", P.id, player=P.team.players[c].id, x=float(me[0]), y=float(me[1]), end_x=float(land[0]), end_y=float(land[1]),
+                            outcome="success" if ok else "fail", speed_kmh=round(rng.uniform(70, 100), 1),
+                            meta={"distance_m": round(dm, 1), "forward": True, "clearance": True,
+                                  "receiver": P.team.players[mate].id if ok else None}))
+        if ok:
+            P.pos[mate] = land
+            self.c = mate
+            self.ball = self._glob(P, land)
+        else:
+            dd = self._dists_m(land, opp)
+            self._turnover(D, int(np.argmin(dd)), t, evs, "clearance")
 
     def _shoot(self, P: _Side, D: _Side, t: float, evs: list[Event], pressure: float):
         rng, c = self.rng, self.c
