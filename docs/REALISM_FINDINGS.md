@@ -19,15 +19,15 @@ Each real frame is given to the model with only the formation, the ball and who 
 The model is close to what a per-team, in-sample linear fit can do. What is left (individual runs, marking, pressing) needs a model
 that looks at opponents, not only at the ball.
 
-## Where the ball goes: real vs simulator (`python -m gamepulse.spatial`, 14 comparisons, 9 within tolerance; was 1 of 14 at the start)
+## Where the ball goes: real vs simulator (`python -m gamepulse.spatial`, 14 comparisons, 12 within tolerance; was 1 of 14 at the start)
 | Quantity | Real | Simulator |
 |---|---|---|
 | forward / backward / lateral passes | 48 / 20 / 32% | 48 / 22 / 30% |
 | pass accuracy from the own / middle / final third | 84 / 87 / 74% | 86 / 86 / 77% |
-| mean shot distance, shots from inside the box | 18.6 m, 57% | 18.8 m, 63% |
+| mean shot distance, shots from inside the box | 18.6 m, 57% | 19.8 m, 59% |
 | passes starting in the own third | 30% | 27% |
-| passes starting wide (more than 25 from the centre line) | 50% | 44% |
-| spread of pass start positions across the pitch (std of y) | 28.8 | 26.6 |
+| passes starting wide (more than 25 from the centre line) | 50% | 49% |
+| spread of pass start positions across the pitch (std of y) | 28.8 | 28.5 |
 | share of passes made by defenders / midfielders / forwards | 44 / 42 / 14% | 41 / 34 / 25% |
 | defenders' median distance behind the ball when their team has it | 8.8 m | 16.9 m |
 | kilometres run by an outfield player in a match | 10.0 | 7.0 (movement inside a tick is not modelled) |
@@ -41,6 +41,27 @@ leave-matches-out placement error 13.57 -> 13.10 m) and off-ball drift of every 
 gives the carrier options ahead of and behind the ball). Still open: forwards still make 25% of the passes (real: 14%), the ball still travels in a narrower band than in real matches, and a tactic's
 style moves the numbers less than in real football (a possession preset shoots 9 times per match, real possession teams 13).
 Coaches should read the Lab as a comparison of tactics under one model, not as a prediction of real results.
+
+## Defending: is there a block in front of the attack?
+Real tracking (7 Bundesliga matches) counts the outfield defenders goal-side of the ball when it is in their half: 3.6 when the ball is 10-20
+units from their goal, 4.9 at 20-33, 6.4 at 33-50. The simulator had 1.9 / 3.0 / 4.3: attacks met too few defenders. Three rules fixed most of it:
+the back line keeps goal-side of the ball, defending players close the gap to their position at full rate, and the defending side keeps running
+back while the ball travels (one move per action was not enough). Now 3.6 / 4.3 / 5.6.
+
+## Team level (`python -m gamepulse.strength`)
+A strong team does not play like a weak one. A Maher / Dixon-Coles Poisson model (attack and defence per team, home advantage) fitted on every
+league season gives each team a strength in log-goal units (champions about +1.2, 10th about -0.07, 20th about -0.9). Grouping the 2,892 real
+team-matches by strength gap gives what a gap does to a match; the simulator's squad quality was scaled on goals only, then everything else was
+compared:
+| Strength gap | Wins real / sim | Goals for real / sim | Goals against real / sim | Pass share real / sim | Shot share real / sim | Pass accuracy real / sim |
+|---|---|---|---|---|---|---|
+| much weaker (-1.07) | 10 / 13% | 0.78 / 0.80 | 2.20 / 2.42 | 41.5 / 47.5% | 38.5 / 35.0% | 80.0 / 80.6% |
+| even (0) | 30 / 39% | 1.15 / 1.32 | 1.15 / 1.07 | 50 / 50% | 50 / 51% | 80.7 / 82.6% |
+| much stronger (+1.07) | 71 / 69% | 2.20 / 2.20 | 0.78 / 0.61 | 58.5 / 53.2% | 61.5 / 66.2% | 85.0 / 85.0% |
+Quality acts mostly through finishing and goalkeeping (real strong teams score more of their shots), and through passing and the defending side's
+reading of the game. What is left: a stronger simulated side gets slightly too many shots and not enough of the ball (53% against 58.5%).
+Coaches choose a level for each side, named after league positions (title contender, European places, ..., relegation battle), in the live match
+and in the Lab.
 
 ## Do different tactics give different games? (`python -m gamepulse.styles`)
 The tables above are averages over all teams, which says nothing about style. This check compares the spread of 78 real teams (season
