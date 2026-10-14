@@ -46,7 +46,7 @@ Coaches should read the Lab as a comparison of tactics under one model, not as a
 Real tracking (7 Bundesliga matches) counts the outfield defenders goal-side of the ball when it is in their half: 3.6 when the ball is 10-20
 units from their goal, 4.9 at 20-33, 6.4 at 33-50. The simulator had 1.9 / 3.0 / 4.3: attacks met too few defenders. Three rules fixed most of it:
 the back line keeps goal-side of the ball, defending players close the gap to their position at full rate, and the defending side keeps running
-back while the ball travels (one move per action was not enough). Now 3.6 / 4.3 / 5.6.
+back while the ball travels (one move per action was not enough). Now 3.1 / 4.1 / 5.2 (web/realism.json).
 
 ## Team level (`python -m gamepulse.strength`)
 A strong team does not play like a weak one. A Maher / Dixon-Coles Poisson model (attack and defence per team, home advantage) fitted on every
