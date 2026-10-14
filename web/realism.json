@@ -1,0 +1,522 @@
+{
+ "generated": "2026-10-14",
+ "sources": [
+  "Wyscout public soccer match event dataset, CC BY 4.0. Pappalardo et al. (2019), Scientific Data 6:236. 1,446 league matches (France, Germany, Italy, Spain 2017/18).",
+  "Sportec Open DFL dataset, CC BY 4.0, with the authorization of the DFL. Bassek, Rein, Weber, Memmert (2025). 7 Bundesliga matches with full tracking.",
+  "Bradley et al. (2011), The effect of playing formation on high-intensity running and technical profiles in English FA Premier League soccer matches, Journal of Sports Sciences 29(8)."
+ ],
+ "totals": [
+  {
+   "label": "Passes per team",
+   "real": 427.63,
+   "sim": 401.5,
+   "ok": true
+  },
+  {
+   "label": "Pass accuracy %",
+   "real": 82.9,
+   "sim": 82.4,
+   "ok": true
+  },
+  {
+   "label": "Mean pass length (m)",
+   "real": 20.27,
+   "sim": 19.93,
+   "ok": true
+  },
+  {
+   "label": "Forward passes %",
+   "real": 47.95,
+   "sim": 48.49,
+   "ok": true
+  },
+  {
+   "label": "Shots per team",
+   "real": 11.07,
+   "sim": 11.29,
+   "ok": true
+  },
+  {
+   "label": "Goals per team",
+   "real": 1.16,
+   "sim": 1.25,
+   "ok": true
+  },
+  {
+   "label": "Shot conversion %",
+   "real": 10.49,
+   "sim": 11.03,
+   "ok": true
+  },
+  {
+   "label": "Fouls per team",
+   "real": 13.77,
+   "sim": 13.77,
+   "ok": true
+  }
+ ],
+ "spatial": [
+  {
+   "label": "passes starting in own third %",
+   "real": 29.8,
+   "sim": 27.4,
+   "ok": true
+  },
+  {
+   "label": "spread of pass start y (std)",
+   "real": 28.8,
+   "sim": 28.4,
+   "ok": true
+  },
+  {
+   "label": "passes starting wide %",
+   "real": 49.8,
+   "sim": 48.4,
+   "ok": true
+  },
+  {
+   "label": "forward passes %",
+   "real": 48.0,
+   "sim": 48.6,
+   "ok": true
+  },
+  {
+   "label": "backward passes %",
+   "real": 20.4,
+   "sim": 21.9,
+   "ok": true
+  },
+  {
+   "label": "lateral passes %",
+   "real": 31.7,
+   "sim": 29.5,
+   "ok": true
+  },
+  {
+   "label": "passes by defenders %",
+   "real": 44.2,
+   "sim": 41.3,
+   "ok": true
+  },
+  {
+   "label": "passes by midfielders %",
+   "real": 41.9,
+   "sim": 33.5,
+   "ok": false
+  },
+  {
+   "label": "passes by forwards %",
+   "real": 13.9,
+   "sim": 25.2,
+   "ok": false
+  },
+  {
+   "label": "accuracy, own third %",
+   "real": 83.8,
+   "sim": 85.3,
+   "ok": true
+  },
+  {
+   "label": "accuracy, middle third %",
+   "real": 86.6,
+   "sim": 85.7,
+   "ok": true
+  },
+  {
+   "label": "accuracy, final third %",
+   "real": 73.7,
+   "sim": 75.7,
+   "ok": true
+  },
+  {
+   "label": "mean shot distance (m)",
+   "real": 18.6,
+   "sim": 19.8,
+   "ok": true
+  },
+  {
+   "label": "shots from inside the box %",
+   "real": 56.8,
+   "sim": 59.2,
+   "ok": true
+  }
+ ],
+ "styles": [
+  {
+   "label": "share of all passes %",
+   "real": [
+    42.5,
+    58.6
+   ],
+   "sim": [
+    44.9,
+    58.0
+   ]
+  },
+  {
+   "label": "passes per match",
+   "real": [
+    350.2,
+    536.7
+   ],
+   "sim": [
+    358.4,
+    461.2
+   ]
+  },
+  {
+   "label": "pass accuracy %",
+   "real": [
+    77.7,
+    86.2
+   ],
+   "sim": [
+    78.3,
+    88.0
+   ]
+  },
+  {
+   "label": "forward passes %",
+   "real": [
+    45.2,
+    51.7
+   ],
+   "sim": [
+    36.6,
+    55.0
+   ]
+  },
+  {
+   "label": "passes starting in own third %",
+   "real": [
+    26.5,
+    34.3
+   ],
+   "sim": [
+    23.5,
+    35.1
+   ]
+  },
+  {
+   "label": "mean pass start x (0-100)",
+   "real": [
+    45.1,
+    49.5
+   ],
+   "sim": [
+    46.2,
+    54.1
+   ]
+  },
+  {
+   "label": "mean pass length (m)",
+   "real": [
+    19.3,
+    21.6
+   ],
+   "sim": [
+    17.3,
+    22.2
+   ]
+  },
+  {
+   "label": "shots per match",
+   "real": [
+    8.8,
+    14.3
+   ],
+   "sim": [
+    6.4,
+    12.7
+   ]
+  }
+ ],
+ "strength": [
+  {
+   "gap": -1.07,
+   "win": {
+    "real": 10.13,
+    "sim": 12.5
+   },
+   "draw": {
+    "real": 19.3,
+    "sim": 16.67
+   },
+   "gf": {
+    "real": 0.78,
+    "sim": 0.8
+   },
+   "ga": {
+    "real": 2.2,
+    "sim": 2.42
+   },
+   "pass_share": {
+    "real": 41.54,
+    "sim": 47.52
+   },
+   "shot_share": {
+    "real": 38.5,
+    "sim": 35.0
+   },
+   "pass_acc": {
+    "real": 80.03,
+    "sim": 80.59
+   }
+  },
+  {
+   "gap": -0.45,
+   "win": {
+    "real": 20.47,
+    "sim": 30.0
+   },
+   "draw": {
+    "real": 26.17,
+    "sim": 24.17
+   },
+   "gf": {
+    "real": 0.97,
+    "sim": 1.02
+   },
+   "ga": {
+    "real": 1.66,
+    "sim": 1.43
+   },
+   "pass_share": {
+    "real": 46.62,
+    "sim": 48.67
+   },
+   "shot_share": {
+    "real": 45.03,
+    "sim": 44.88
+   },
+   "pass_acc": {
+    "real": 80.08,
+    "sim": 81.71
+   }
+  },
+  {
+   "gap": -0.2,
+   "win": {
+    "real": 33.46,
+    "sim": 27.5
+   },
+   "draw": {
+    "real": 23.53,
+    "sim": 29.17
+   },
+   "gf": {
+    "real": 1.17,
+    "sim": 0.93
+   },
+   "ga": {
+    "real": 1.3,
+    "sim": 1.4
+   },
+   "pass_share": {
+    "real": 49.41,
+    "sim": 49.7
+   },
+   "shot_share": {
+    "real": 48.34,
+    "sim": 48.17
+   },
+   "pass_acc": {
+    "real": 81.2,
+    "sim": 82.45
+   }
+  },
+  {
+   "gap": 0.0,
+   "win": {
+    "real": 30.45,
+    "sim": 39.17
+   },
+   "draw": {
+    "real": 39.1,
+    "sim": 28.33
+   },
+   "gf": {
+    "real": 1.15,
+    "sim": 1.32
+   },
+   "ga": {
+    "real": 1.15,
+    "sim": 1.07
+   },
+   "pass_share": {
+    "real": 50.0,
+    "sim": 50.08
+   },
+   "shot_share": {
+    "real": 50.0,
+    "sim": 50.69
+   },
+   "pass_acc": {
+    "real": 80.65,
+    "sim": 82.62
+   }
+  },
+  {
+   "gap": 0.2,
+   "win": {
+    "real": 43.01,
+    "sim": 49.17
+   },
+   "draw": {
+    "real": 23.53,
+    "sim": 27.5
+   },
+   "gf": {
+    "real": 1.3,
+    "sim": 1.44
+   },
+   "ga": {
+    "real": 1.17,
+    "sim": 0.95
+   },
+   "pass_share": {
+    "real": 50.59,
+    "sim": 50.53
+   },
+   "shot_share": {
+    "real": 51.66,
+    "sim": 53.02
+   },
+   "pass_acc": {
+    "real": 81.29,
+    "sim": 83.1
+   }
+  },
+  {
+   "gap": 0.45,
+   "win": {
+    "real": 53.37,
+    "sim": 44.17
+   },
+   "draw": {
+    "real": 26.17,
+    "sim": 27.5
+   },
+   "gf": {
+    "real": 1.66,
+    "sim": 1.38
+   },
+   "ga": {
+    "real": 0.97,
+    "sim": 0.96
+   },
+   "pass_share": {
+    "real": 53.38,
+    "sim": 51.17
+   },
+   "shot_share": {
+    "real": 54.97,
+    "sim": 57.67
+   },
+   "pass_acc": {
+    "real": 82.34,
+    "sim": 83.48
+   }
+  },
+  {
+   "gap": 1.07,
+   "win": {
+    "real": 70.57,
+    "sim": 69.17
+   },
+   "draw": {
+    "real": 19.3,
+    "sim": 23.33
+   },
+   "gf": {
+    "real": 2.2,
+    "sim": 2.2
+   },
+   "ga": {
+    "real": 0.78,
+    "sim": 0.61
+   },
+   "pass_share": {
+    "real": 58.46,
+    "sim": 53.24
+   },
+   "shot_share": {
+    "real": 61.5,
+    "sim": 66.2
+   },
+   "pass_acc": {
+    "real": 84.99,
+    "sim": 84.98
+   }
+  }
+ ],
+ "levels": {
+  "title": {
+   "strength": 0.9,
+   "label": "Title contender (1st-2nd)"
+  },
+  "europe": {
+   "strength": 0.5,
+   "label": "European places (3rd-5th)"
+  },
+  "upper": {
+   "strength": 0.2,
+   "label": "Upper half (6th-8th)"
+  },
+  "mid": {
+   "strength": 0.0,
+   "label": "Mid-table (9th-12th)"
+  },
+  "lower": {
+   "strength": -0.3,
+   "label": "Lower half (13th-16th)"
+  },
+  "relegation": {
+   "strength": -0.7,
+   "label": "Relegation battle (17th-20th)"
+  }
+ },
+ "placement": {
+  "fixed": 19.99,
+  "model": 13.0,
+  "matches": 7,
+  "note": "Mean distance between each real player and the position the model predicts from the formation and the ball only."
+ },
+ "defending": [
+  {
+   "depth": "10-20",
+   "real": 3.59,
+   "sim": 3.14
+  },
+  {
+   "depth": "20-33",
+   "real": 4.87,
+   "sim": 4.07
+  },
+  {
+   "depth": "33-50",
+   "real": 6.39,
+   "sim": 5.21
+  }
+ ],
+ "formations": [
+  {
+   "formation": "4-4-2",
+   "real": 50,
+   "sim": 51.2,
+   "pass_acc": 83.3
+  },
+  {
+   "formation": "4-3-3",
+   "real": 49,
+   "sim": 50.4,
+   "pass_acc": 82.8
+  },
+  {
+   "formation": "4-5-1",
+   "real": 44,
+   "sim": 51.5,
+   "pass_acc": 83.6
+  }
+ ]
+}

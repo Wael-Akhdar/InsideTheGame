@@ -54,6 +54,15 @@
   .chips { display:flex; gap:6px; flex-wrap:wrap; align-items:center; } .chip { background:var(--panel2); border:1px solid #4d2a6e; border-radius:14px; padding:3px 10px; font-size:12px; }
   .slot input[type=text] { width:100%; font-size:12px; } .slot small { color:var(--mute); font-size:11px; line-height:1.3; } .slot .ai { display:flex; gap:4px; } .slot .ai button { padding:3px 8px; font-size:11px; }
   .slot.cu { outline:1px solid var(--accent); }
+  /* realism */
+  .rg { display:grid; grid-template-columns:repeat(auto-fit,minmax(420px,1fr)); gap:16px; padding:16px 24px; }
+  @media (max-width:520px) { .rg { grid-template-columns:1fr; padding:16px; } }
+  .kpis { display:flex; gap:28px; flex-wrap:wrap; } .kpi b { display:block; font-size:34px; font-weight:800; color:var(--accent); } .kpi span { font-size:12px; color:var(--mute); }
+  table.rv { width:100%; border-collapse:collapse; font-size:13px; } table.rv td, table.rv th { padding:5px 6px; border-top:1px solid var(--line); text-align:right; }
+  table.rv th { color:var(--mute); font-weight:500; font-size:11px; text-transform:uppercase; border-top:0; } table.rv td:first-child, table.rv th:first-child { text-align:left; }
+  .okb { font-size:11px; padding:1px 7px; border-radius:9px; background:#0d3b26; color:var(--accent); } .offb { font-size:11px; padding:1px 7px; border-radius:9px; background:#3d1022; color:#ff7aa5; }
+  .rng { position:relative; height:22px; background:var(--panel2); border-radius:6px; } .rng i { position:absolute; height:8px; border-radius:4px; } .rng i.r { top:2px; background:var(--accent); } .rng i.s { top:12px; background:var(--pink); }
+  .src { color:var(--mute); font-size:12px; line-height:1.5; }
   .cmp td.up { color:var(--accent); } .cmp td.dn { color:var(--pink); }
   #tip { position:fixed; pointer-events:none; background:#000c; padding:4px 8px; border-radius:6px; font-size:12px; display:none; z-index:9; }
 </style>
@@ -65,6 +74,7 @@
     <button data-tab="match" class="on">Live match</button>
     <button data-tab="tactics">Tactics</button>
     <button data-tab="lab">Tactic Lab</button>
+    <button data-tab="real">Realism</button>
   </nav>
 </header>
 
@@ -154,6 +164,11 @@
   </div>
 </section>
 
+<!-- ====================================================== REALISM -->
+<section id="tab-real" class="tab">
+  <div class="rg" id="rOut"><div class="card" style="color:var(--mute)">Loading the comparison with real matches…</div></div>
+</section>
+
 <!-- ====================================================== LAB -->
 <section id="tab-lab" class="tab">
   <div class="labg">
@@ -195,6 +210,7 @@ document.querySelectorAll("nav button").forEach(b => b.onclick = () => {
   document.querySelectorAll("nav button").forEach(x => x.classList.toggle("on", x === b));
   document.querySelectorAll(".tab").forEach(t => t.classList.toggle("on", t.id === "tab-" + b.dataset.tab));
   if (b.dataset.tab === "tactics") drawPreview();
+  if (b.dataset.tab === "real") loadRealism();
 });
 
 /* ---------------------------------------------------------------- catalog / tactics */
@@ -598,6 +614,69 @@ function renderWhatIf(r) {
         <td>${m.goal_diff_before} → ${m.goal_diff_after}</td><td>${m.xg_diff_before} → ${m.xg_diff_after}</td><td>${m.win_before} → ${m.win_after}</td><td>${m.loss_before} → ${m.loss_after}</td></tr>`).join("")}</table></div>`;
 }
 
+
+/* ---------------------------------------------------------------- realism */
+let realism = null, rMetric = "win";
+async function loadRealism() {
+  if (!realism) { try { realism = await (await fetch("/api/realism")).json(); } catch (e) { $("rOut").innerHTML = `<div class="card">Realism report not available: ${e}</div>`; return; } }
+  renderRealism();
+}
+const badge = ok => ok ? '<span class="okb">match</span>' : '<span class="offb">gap</span>';
+function renderRealism() {
+  const r = realism, ok = a => a.filter(x => x.ok).length;
+  const rows = (a, digits = 1) => a.map(x => `<tr><td>${x.label}</td><td>${(+x.real).toFixed(digits)}</td><td>${(+x.sim).toFixed(digits)}</td><td>${badge(x.ok)}</td></tr>`).join("");
+  const lo = Math.min(...r.styles.flatMap(x => [x.real[0], x.sim[0]])), styleRow = x => {
+    const a = Math.min(x.real[0], x.sim[0]), b = Math.max(x.real[1], x.sim[1]), pad = (b - a) * 0.15, L = a - pad, W = (b - a) + 2 * pad;
+    const pos = (v0, v1) => `left:${100 * (v0 - L) / W}%;width:${Math.max(1, 100 * (v1 - v0) / W)}%`;
+    return `<tr><td>${x.label}</td><td style="width:45%"><div class="rng"><i class="r" style="${pos(...x.real)}"></i><i class="s" style="${pos(...x.sim)}"></i></div></td>
+      <td>${x.real[0]}–${x.real[1]}</td><td>${x.sim[0]}–${x.sim[1]}</td></tr>`; };
+  const metrics = { win: "Win %", gf: "Goals scored", ga: "Goals conceded", pass_share: "Share of the passes %", shot_share: "Share of the shots %", pass_acc: "Pass accuracy %" };
+  $("rOut").innerHTML = `
+  <div class="card" style="grid-column:1/-1"><h3>Is it real football?</h3>
+    <p style="margin:4px 0 12px;font-size:14px">Every number on this page compares the simulator with real matches: 1,446 league games of event data and 7 Bundesliga games with full tracking.
+      Nothing here is hand-picked: the same checks run in the test suite.</p>
+    <div class="kpis">
+      <div class="kpi"><b>${ok(r.totals)}/${r.totals.length}</b><span>match totals within tolerance</span></div>
+      <div class="kpi"><b>${ok(r.spatial)}/${r.spatial.length}</b><span>pitch-location checks within tolerance</span></div>
+      <div class="kpi"><b>${r.placement.model} m</b><span>mean player placement error (a fixed formation: ${r.placement.fixed} m)</span></div>
+      <div class="kpi"><b>${Math.round(r.strength[r.strength.length - 1].win.sim)}%</b><span>wins for a much stronger side (real: ${Math.round(r.strength[r.strength.length - 1].win.real)}%)</span></div>
+    </div></div>
+  <div class="card"><h3>Match totals <b>per team and match</b></h3><table class="rv"><tr><th></th><th>Real</th><th>Sim</th><th></th></tr>${rows(r.totals, 1)}</table></div>
+  <div class="card"><h3>Where the ball goes</h3><table class="rv"><tr><th></th><th>Real</th><th>Sim</th><th></th></tr>${rows(r.spatial, 1)}</table></div>
+  <div class="card"><h3>Team level <b>what a strength gap does</b></h3>
+    <div class="chips" id="rMet">${Object.entries(metrics).map(([k, v]) => `<span class="chip" data-m="${k}" style="cursor:pointer;${k === rMetric ? "border-color:var(--accent)" : ""}">${v}</span>`).join("")}</div>
+    <canvas id="rChart" width="560" height="260" style="width:100%;margin-top:8px"></canvas>
+    <div class="legend"><span><i class="dot" style="background:var(--accent)"></i>Real leagues (2,892 team-matches)</span><span><i class="dot" style="background:var(--pink)"></i>Simulator</span></div>
+    <p class="src">Strength gap: log of the ratio of expected goals between the two sides, from a Poisson model fitted on each league season. Left: much weaker side, right: much stronger.</p></div>
+  <div class="card"><h3>Do tactics change the game? <b>10th–90th percentile</b></h3>
+    <table class="rv"><tr><th></th><th></th><th>Real teams</th><th>Sim tactics</th></tr>${r.styles.map(styleRow).join("")}</table>
+    <div class="legend"><span><i class="dot" style="background:var(--accent)"></i>78 real teams (season averages)</span><span><i class="dot" style="background:var(--pink)"></i>48 random tactics</span></div></div>
+  <div class="card"><h3>Defending <b>outfield defenders goal-side of the ball</b></h3>
+    <table class="rv"><tr><th>Ball distance from goal</th><th>Real</th><th>Sim</th></tr>${r.defending.map(d => `<tr><td>${d.depth} (of 100)</td><td>${d.real.toFixed(1)}</td><td>${d.sim.toFixed(1)}</td></tr>`).join("")}</table>
+    <h3 style="margin-top:14px">Formations <b>possession vs a 4-3-3</b></h3>
+    <table class="rv"><tr><th>Formation</th><th>Premier League study</th><th>Sim</th></tr>${r.formations.map(f => `<tr><td>${f.formation}</td><td>${f.real}%</td><td>${f.sim}%</td></tr>`).join("")}</table>
+    <p class="src">Study: 20 Premier League matches, no significant difference between formations (standard deviation 6–8 points).</p></div>
+  <div class="card" style="grid-column:1/-1"><h3>Sources</h3>${r.sources.map(x => `<div class="src">${x}</div>`).join("")}
+    <div class="src">Aggregated numbers only; no raw data is published. Report generated ${r.generated} with <code>python tools/realism_report.py</code>. Known gaps are listed in docs/REALISM_FINDINGS.md.</div></div>`;
+  document.querySelectorAll("#rMet .chip").forEach(c => c.onclick = () => { rMetric = c.dataset.m; renderRealism(); });
+  drawStrength();
+}
+function drawStrength() {
+  const cv = $("rChart"), g = cv.getContext("2d"), W = cv.width, H = cv.height, P = { l: 46, r: 14, t: 14, b: 30 };
+  const pts = realism.strength, xs = pts.map(p => p.gap), ys = pts.flatMap(p => [p[rMetric].real, p[rMetric].sim]);
+  const x0 = Math.min(...xs), x1 = Math.max(...xs), y0 = Math.min(...ys) * 0.9, y1 = Math.max(...ys) * 1.05;
+  const X = v => P.l + (W - P.l - P.r) * (v - x0) / (x1 - x0), Y = v => H - P.b - (H - P.t - P.b) * (v - y0) / (y1 - y0);
+  const css = getComputedStyle(document.documentElement);
+  g.clearRect(0, 0, W, H); g.font = "12px system-ui"; g.fillStyle = css.getPropertyValue("--mute"); g.strokeStyle = css.getPropertyValue("--line"); g.lineWidth = 1;
+  for (let k = 0; k <= 4; k++) { const v = y0 + (y1 - y0) * k / 4; g.beginPath(); g.moveTo(P.l, Y(v)); g.lineTo(W - P.r, Y(v)); g.stroke(); g.fillText(v.toFixed(rMetric.length > 3 && rMetric !== "pass_acc" ? 0 : (y1 < 5 ? 1 : 0)), 6, Y(v) + 4); }
+  xs.forEach(v => g.fillText((v > 0 ? "+" : "") + v.toFixed(2), X(v) - 14, H - 10));
+  [["real", css.getPropertyValue("--accent")], ["sim", css.getPropertyValue("--pink")]].forEach(([k, col]) => {
+    g.strokeStyle = col; g.fillStyle = col; g.lineWidth = 2.5; g.setLineDash(k === "sim" ? [7, 5] : []); g.beginPath();
+    pts.forEach((p, i) => { const x = X(p.gap), y = Y(p[rMetric][k]); i ? g.lineTo(x, y) : g.moveTo(x, y); }); g.stroke(); g.setLineDash([]);
+    pts.forEach(p => { g.beginPath(); g.arc(X(p.gap), Y(p[rMetric][k]), 3.5, 0, 7); g.fill(); });
+  });
+}
+
 /* ---------------------------------------------------------------- boot */
 fetch("/api/catalog").then(r => r.json()).then(c => {
   catalog = c; refreshSelectors();
@@ -610,6 +689,7 @@ fetch("/api/catalog").then(r => r.json()).then(c => {
   if (location.hash === "#lab") { document.querySelector("[data-tab=lab]").click(); $("lRun").click(); }
   if (location.hash === "#tracking") { $("mSource").value = "sportec"; $("mSource").onchange(); $("mSpeed").value = "150"; $("go").click(); }
   if (location.hash === "#real") { $("mSource").value = "Italy"; $("mSource").onchange(); $("mSeed").value = "40"; $("mSpeed").value = "400"; $("go").click(); }
+  if (location.hash === "#realism") document.querySelector("[data-tab=real]").click();
   if (location.hash === "#demo") { $("mSpeed").value = "150"; $("go").click(); }
 });
 </script>

@@ -124,6 +124,48 @@ def fit(train: list[TeamTrack], start: Optional[dict] = None) -> dict:
     return out
 
 
+DEPTHS = [(10, 20), (20, 33), (33, 50)]  # ball distance from the defending side's goal line (pitch units)
+
+
+def real_goal_side(tracks: list[TeamTrack]) -> dict[str, float]:
+    """Outfield defenders between the ball and their own goal, by depth of the ball, in real tracking (team defending)."""
+    out: dict[tuple, list[int]] = {d: [] for d in DEPTHS}
+    for t in tracks:
+        for pts, b, has in zip(t.real, t.ball, t.has_ball):
+            if has or len(pts) < 10:
+                continue
+            outfield = pts[np.argsort(pts[:, 0])][1:]  # the deepest player is the goalkeeper
+            for lo, hi in DEPTHS:
+                if lo <= b[0] < hi:
+                    out[(lo, hi)].append(int(np.sum(outfield[:, 0] < b[0])))
+    return {f"{lo}-{hi}": float(np.mean(v)) for (lo, hi), v in out.items()}
+
+
+def sim_goal_side(n: int = 4) -> dict[str, float]:
+    """Same count in the simulator, taken when the ball carrier decides (Balanced vs Balanced)."""
+    from .simulator.match import MatchSimulator
+
+    out: dict[tuple, list[int]] = {d: [] for d in DEPTHS}
+    orig = MatchSimulator._step
+
+    def step(self, t, dt, evs):
+        P, D = self.sides[self.poss], self.sides[self._other(self.poss)]
+        bx = 100 - P.pos[self.c, 0]
+        for lo, hi in DEPTHS:
+            if lo <= bx < hi:
+                out[(lo, hi)].append(int(np.sum(D.active & ~D.gk & (D.pos[:, 0] < bx))))
+        return orig(self, t, dt, evs)
+
+    MatchSimulator._step = step
+    try:
+        for s in range(n):
+            for _ in MatchSimulator(seed=s, home_tactic="Balanced 4-3-3", away_tactic="Balanced 4-3-3", record_frames=False).events():
+                pass
+    finally:
+        MatchSimulator._step = orig
+    return {f"{lo}-{hi}": float(np.mean(v)) for (lo, hi), v in out.items()}
+
+
 # ---------------------------------------------------------------------------------------------------------------- outcomes
 def real_team_stats(feed: SportecFeed) -> dict[str, dict[str, float]]:
     """Per-team aggregates of a real match (from the events and the ball-possession flag of the frames)."""

@@ -46,6 +46,15 @@ def index():
     return FileResponse(WEB / "index.html")
 
 
+@app.get("/api/realism")
+def realism():
+    """Every real-vs-simulated comparison (aggregates only), built by tools/realism_report.py."""
+    f = WEB / "realism.json"
+    if not f.exists():
+        raise HTTPException(404, "Run python tools/realism_report.py first")
+    return json.loads(f.read_text())
+
+
 @app.get("/api/catalog")
 def catalog():
     cat = describe_catalog()
