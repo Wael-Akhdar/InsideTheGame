@@ -38,6 +38,12 @@ class Overlay:
     importance: float
     lang: str
     mode: str
+    # timing and targeting, so a renderer can place the card on a video without knowing our engine
+    t: float = 0.0  # match clock in seconds when the card should appear (time of the triggering event)
+    duration: float = 8.0  # seconds the card stays on screen
+    team: Optional[str] = None
+    player: Optional[str] = None
+    id: int = 0
 
     def to_dict(self):
         return self.__dict__.copy()
@@ -192,5 +198,7 @@ class Orchestrator:
                 continue
             why = self.explainer.run(m, self.state)
             headline, body = self.narrator.run(m, why, viewer, self.state, self.explainer.plain(m, self.state))
-            overlays.append(Overlay(m.minute, m.kind, headline, body, why, m.evidence, rel, viewer.lang, viewer.mode))
+            overlays.append(Overlay(m.minute, m.kind, headline, body, why, m.evidence, rel, viewer.lang, viewer.mode,
+                                    t=ev.minute * 60 + ev.second, duration=10.0 if m.score >= 0.8 else 7.0,
+                                    team=m.team, player=m.player))
         return overlays

@@ -72,6 +72,7 @@ With `AZURE_OPENAI_*` set, narration and translation go through your Foundry dep
 | `gamepulse/agents/pipeline.py` | Agents (Explainer, Narrator, Persona) and the orchestrator |
 | `gamepulse/agents/llm.py` | Azure OpenAI client with offline fallback |
 | `gamepulse/api/server.py` | FastAPI + Server-Sent Events stream |
+| `gamepulse/overlay.py` | Timestamped overlay JSON export, see docs/OVERLAY.md |
 | `web/index.html` | Live dashboard (overlay cards, momentum bar, stats) |
 | `docs/SUBMISSION.md` | Pitch, tagline, description, video script for Innovation Studio |
 | `docs/TASKS.md` | Roadmap and work split |

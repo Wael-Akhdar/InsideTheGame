@@ -12,6 +12,7 @@ from fastapi.responses import FileResponse, StreamingResponse
 
 from ..agents.interpreter import interpret_role, interpret_scenario
 from ..agents.pipeline import Orchestrator, Viewer
+from ..overlay import build_feed, export_overlay
 from ..lab import evaluate, what_if
 from ..scenario import PRESET_SCENARIOS, describe_rule, sanitize
 from ..feed import SimulatorFeed
@@ -152,6 +153,21 @@ async def stream(seed: int = 42, speed: float = 60.0, mode: str = "casual", lang
             SESSIONS.pop(sid or "", None)
 
     return StreamingResponse(gen(), media_type="text/event-stream")
+
+
+@app.get("/api/overlay")
+async def overlay(source: str = "sim", seed: int = 42, league: str = "Spain", lang: str = "en", mode: str = "casual",
+                  team: Optional[str] = None, player: Optional[str] = None):
+    """The whole match as timestamped overlay cards (JSON), ready for a video renderer."""
+    if source not in ("sim", "wyscout", "sportec"):
+        raise HTTPException(400, "source must be sim, wyscout or sportec")
+    try:
+        feed = await run_in_threadpool(build_feed, source, seed, league)
+    except (DataMissing, SportecMissing) as e:
+        raise HTTPException(404, str(e))
+    viewer = Viewer(mode=mode if mode in ("casual", "analyst") else "casual", lang=lang if lang in ("en", "fr", "es", "ar") else "en",
+                    favorite_team=team, focus_player=player)
+    return await run_in_threadpool(export_overlay, feed, viewer)
 
 
 @app.post("/api/match/control")
