@@ -42,6 +42,23 @@ gives the carrier options ahead of and behind the ball). Still open: forwards st
 style moves the numbers less than in real football (a possession preset shoots 9 times per match, real possession teams 13).
 Coaches should read the Lab as a comparison of tactics under one model, not as a prediction of real results.
 
+## Do different tactics give different games? (`python -m gamepulse.styles`)
+The tables above are averages over all teams, which says nothing about style. This check compares the spread of 78 real teams (season
+averages, 10th to 90th percentile) with the spread across 60 random tactics in the simulator (all five instructions drawn between 0.05 and
+0.95, formation drawn, against a balanced opponent):
+| Metric | Real teams | Simulated tactics |
+|---|---|---|
+| share of the match's passes | 42.5 to 58.6% | 45.0 to 58.3% |
+| pass accuracy | 77.7 to 86.2% | 78.4 to 88.2% |
+| shots per match | 8.8 to 14.3 | 7.0 to 13.0 |
+| passes per match (random tactics) | 350 to 537 | 354 to 470; a patient, fast, pressing tactic reaches 533, a direct slow one 337 |
+Directness moves the pass share from 46% to 58% and the accuracy from 80% to 87%; pressing and tempo move the number of passes (365 to 481 across
+tempo). A real team's range also contains differences in player quality, which the simulator does not have (all squads are equal), so a simulated range
+that matches the real one with tactics alone is a strict test. Known limits: simulated tactics reach further than real teams in territory (mean pass
+start 47 to 56 against 45 to 49.5) and in pass length (17 to 22 m against 19 to 22 m), and real high-possession teams shoot more than the simulated
+possession preset (13.5 against 9): in the simulator, keeping the ball does not by itself create chances.
+`tests/test_styles.py` fails if a patient and a direct tactic stop producing different games (10 points of pass share, 4 points of accuracy).
+
 ## What was tried and why it is not on main
 Branch `realism-experiments` holds the work: a data prior built from real passes (where passes go from each zone, shot rate and pass
 accuracy by zone), a per-line positioning model fitted with a shape-fidelity term, and automatic tuning of the passing and shooting
