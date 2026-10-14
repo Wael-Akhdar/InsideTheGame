@@ -11,7 +11,9 @@ x=0); frames sent to the UI use *global* coordinates (home attacks to the right)
 from __future__ import annotations
 
 import asyncio
+import json
 import math
+from pathlib import Path
 import random
 from typing import AsyncIterator, Iterator, Optional
 
@@ -36,8 +38,8 @@ SHAPE = {"ball_shift_x": 0.3, "ball_shift_y": 0.2, "lh_in": 10.0, "lh_out": 24.0
          "gk_base": 5.0, "gk_ball": 0.08, "ax_scale": 1.0, "off_df": 0.0, "off_mf": 0.0, "off_fw": 0.0}
 
 
-PASS = {"wide": 8.0, "dir_base": 1.875, "lateral": 0.9, "fw_back": 0.5, "back": 0.469, "dist_scale": 0.7, "acc_len": 1.0, "rw_gk": 1.0, "rw_df": 1.5, "rw_mf": 1.0,
-        "rw_fw": 0.25, "own_keep": 7.5, "fin_back": 0.3}  # receiver weights, see _pass
+PASS = {"wide": 8.0, "dir_base": 1.875, "lateral": 0.9, "fw_back": 0.586, "back": 0.374, "dist_scale": 0.4, "acc_len": 1.0, "rw_gk": 1.0, "rw_df": 1.5,
+        "rw_mf": 1.0, "rw_fw": 0.25, "own_keep": 7.5, "fin_back": 0.375, "fwd_cap": 100.0}  # receiver weights, see _pass
 LEN_X = [0, 5, 15, 25, 35, 45, 60]
 LEN_ADJ = [0.0, -0.05, 0.05, 0.06, 0.04, -0.03, -0.23]
 def _third(x: float) -> int:
@@ -48,14 +50,23 @@ def _third(x: float) -> int:
 ACC_TABLE = [[0.02, 0.04, 0.0], [0.08, 0.06, -0.10], [0.12, 0.09, -0.15]]
 
 
-SHOT = {"p": 0.065, "box_near": 3.4}  # shooting propensity: base rate and the factor inside the box up to the six-yard line
+SHOT = {"p": 0.069, "box_near": 3.287}  # shooting propensity: base rate and the factor inside the box up to the six-yard line
 TACKLE = 1.0  # scale of the tackle attempts by the closest defender
 CARRY = 1.0  # scale of the share of actions where the carrier runs with the ball
 REGAIN = {"go_to_ball": True}
 CLEAR = {"p": 0.0, "x": 30.0, "win": 0.45}  # clearances: under pressure in its own third a team hoofs the ball long and the second ball is contested
 
 
-def shape_targets(S, has_ball: bool, bx: float, by: float, params: dict | None = None) -> np.ndarray:
+def _load_correction():
+    f = Path(__file__).with_name("shape_correction.json")
+    return json.loads(f.read_text())["table"] if f.exists() else None
+
+
+WANDER = {"sx": 16.875, "sy": 10.0, "tau": 40.0}  # players drift around their target (runs, drops): sd in pitch units and time constant in seconds
+CORRECTION = _load_correction()  # how far real lines stand from the uncorrected model, by phase, line and ball depth (tools/build_shape_correction.py)
+
+
+def shape_targets(S, has_ball: bool, bx: float, by: float, params: dict | None = None, correction: bool = True) -> np.ndarray:
     """Where the 11 players of a side want to stand, in the team frame, given the ball (bx, by) and who has it.
 
     Depends only on the formation, the roles, the instructions (line height, width, tempo, directness) and the ball:
@@ -79,6 +90,10 @@ def shape_targets(S, has_ball: bool, bx: float, by: float, params: dict | None =
         near = ~S.gk & (S.base[:, 0] < 68)  # forwards keep their shape: they are the targets of the build-up
         tx = np.where(near, tx + (bx - tx) * support * 0.4, tx)
         ty = np.where(near, ty + (by - ty) * support, ty)
+    if correction and CORRECTION:
+        band = min(len(CORRECTION["in"]["DF"]) - 1, int(bx / 100 * len(CORRECTION["in"]["DF"])))
+        shift = np.array([CORRECTION["in" if has_ball else "out"][ln][band] if ln != "GK" else 0.0 for ln in S.line])
+        tx = tx + shift
     return np.stack([np.clip(tx, 3, 97), np.clip(ty, 3, 97)], axis=1)
 
 
@@ -106,6 +121,7 @@ class _Side:
         self.active = np.ones(11, bool)
         self.fat = 1.0
         self.pressers: list[int] = []
+        self.wander = np.zeros((11, 2))
 
     def attr(self, i: int, name: str) -> float:
         return self.team.players[i].attrs[name] * (0.6 + 0.4 * self.inj[i])  # injured players perform worse
@@ -204,6 +220,14 @@ class MatchSimulator:
                 tgt[i] = (bx, by)
                 full[i] = True
                 S.pressers.append(int(i))
+
+        rho = math.exp(-dt / WANDER["tau"])
+        S.wander = S.wander * rho + self.nprng.normal(0, 1, (11, 2)) * np.array([WANDER["sx"], WANDER["sy"]]) * math.sqrt(1 - rho * rho)
+        tgt = np.where(S.gk[:, None], tgt, np.clip(tgt + S.wander, 3, 97))  # off-ball movement; the carrier and pressers are overridden below
+        if has_ball:
+            tgt[self.c] = (min(97.0, S.pos[self.c, 0] + 2.5), S.pos[self.c, 1])
+        for i in S.pressers:
+            tgt[i] = (bx, by)
 
         vec = tgt - S.pos
         dist = np.hypot(vec[:, 0], vec[:, 1]) + 1e-9
@@ -325,7 +349,7 @@ class MatchSimulator:
                 continue
             open_r = min(14.0, float(self._dists_m(rp, opp).min()))
             w_dir = PASS["dir_base"] + 1.0 * directness + 1.2 * role["fw"]
-            w = math.exp(fwd / 22 * w_dir) * (0.35 + open_r / 14) ** (1 + 0.8 * (1 - directness))  # patient teams only find the free man
+            w = math.exp(min(fwd, PASS["fwd_cap"]) / 22 * w_dir) * (0.35 + open_r / 14) ** (1 + 0.8 * (1 - directness))  # patient teams only find the free man
             w *= math.exp(-dm / (PASS["dist_scale"] * (5 + 14 * directness + P.attr(c, "vision") / 12)))
             if fwd < 0:  # recycling the ball is what patient teams do under pressure
                 w *= 1 + 2.0 * (1 - directness) * max(0.0, min(pressure, 2.0) - 0.3)

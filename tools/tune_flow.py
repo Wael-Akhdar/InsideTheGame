@@ -17,8 +17,8 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 SPEC = [("PASS", "dir_base", 0.8, 2.6), ("PASS", "lateral", 0.7, 2.5), ("PASS", "fw_back", 0.1, 1.0), ("PASS", "back", 0.15, 1.2),
-        ("PASS", "dist_scale", 0.4, 1.2), ("PASS", "rw_df", 0.8, 3.0), ("PASS", "rw_fw", 0.15, 1.0), ("PASS", "wide", 0.5, 8.0),
-        ("PASS", "own_keep", 1.0, 12.0), ("PASS", "fin_back", 0.2, 1.0), ("SHOT", "p", 0.04, 0.12), ("SHOT", "box_near", 1.0, 5.0)]
+        ("PASS", "dist_scale", 0.4, 1.2), ("PASS", "rw_df", 0.8, 3.0), ("PASS", "rw_fw", 0.05, 1.0), ("PASS", "fwd_cap", 8.0, 100.0), ("PASS", "wide", 0.5, 8.0),
+        ("PASS", "own_keep", 1.0, 12.0), ("PASS", "fin_back", 0.2, 1.0), ("WANDER", "sx", 6.0, 32.0), ("WANDER", "sy", 3.0, 20.0), ("SHOT", "p", 0.04, 0.12), ("SHOT", "box_near", 1.0, 5.0)]
 
 
 def evaluate(params: dict[str, float], n: int = 40, seed0: int = 1000) -> tuple[float, dict]:
