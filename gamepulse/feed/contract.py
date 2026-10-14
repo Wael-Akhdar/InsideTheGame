@@ -14,6 +14,7 @@ OUTCOMES = {
     "shot": {"goal", "saved", "blocked", "off_target"},
     "tackle": {"won", "lost"},
     "dribble": {"success", "fail"},
+    "clearance": {"success", "fail", None},
     "card": {"red", "yellow"},
 }
 LINES = {"GK", "DF", "MF", "FW"}

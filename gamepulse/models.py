@@ -5,7 +5,7 @@ from dataclasses import asdict, dataclass, field
 from typing import Any, Optional
 
 EVENT_TYPES = (
-    "kickoff", "pass", "shot", "dribble", "tackle", "possession_change",
+    "kickoff", "pass", "shot", "dribble", "tackle", "possession_change", "clearance",
     "pressure", "foul", "card", "goal", "save", "halftime", "fulltime", "tactic_change", "injury",
 )
 

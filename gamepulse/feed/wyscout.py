@@ -171,6 +171,8 @@ class WyscoutFeed:
                                 outcome="success" if ok else "fail",
                                 meta={"distance_m": round(math.hypot((x1 - x0) * KX, (y1 - y0) * KY), 1), "forward": (x1 - x0) > 3,
                                       "receiver": receiver, "kind": sub}))
+            elif name == "Others on the ball" and sub == "Clearance" and pid:
+                out.append(make(t, "clearance", team, player=pid, x=clamp(x0), y=clamp(y0)))
             elif (name == "Shot" or (name == "Free Kick" and sub in ("Free kick shot", "Penalty"))) and pid:
                 outcome = "goal" if GOAL in tags else "blocked" if BLOCKED in tags else "saved" if ACCURATE in tags else "off_target"
                 shot = make(t, "shot", team, player=pid, x=clamp(x0), y=clamp(y0), end_x=100.0, end_y=50.0, outcome=outcome,

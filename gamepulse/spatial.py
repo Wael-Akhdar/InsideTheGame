@@ -32,12 +32,14 @@ class Acc:
         self.shots = 0
         self.box = 0
         self.shot_d = []
-        self.own_third = self.wide = 0
+        self.own_third = self.wide = self.final_third = self.deep = 0
 
     def add_pass(self, line: str, x: float, y: float, ex: float, ok: bool):
         self.n += 1
         self.ys.append(y)
         self.own_third += x < 33.3
+        self.final_third += x >= 66.7
+        self.deep += x >= 80
         self.wide += abs(y - 50) > 25
         t = 0 if x < 33.3 else 1 if x < 66.7 else 2
         self.third_n[t] += 1
@@ -52,15 +54,18 @@ class Acc:
         self.shot_d.append(d)
         self.box += x > 84 and abs(y - 50) < 24
 
-    def summary(self) -> dict[str, float]:
+    def summary(self, per_line: dict[str, float] | None = None) -> dict[str, float]:
+        """`per_line`: average number of players of each line on the pitch, to express the shares per player."""
         n = max(1, self.n)
         field = max(1, sum(self.line[k] for k in ("DF", "MF", "FW")))
+        per_line = per_line or {"DF": 4.0, "MF": 3.0, "FW": 3.0}
         return {
-            "own_third": 100 * self.own_third / n,
+            "own_third": 100 * self.own_third / n, "final_third": 100 * self.final_third / n, "deep": 100 * self.deep / n,
             "y_std": st.pstdev(self.ys) if self.ys else 0.0,
             "wide": 100 * self.wide / n,
             "fwd": 100 * self.dirs[0] / n, "back": 100 * self.dirs[1] / n, "lat": 100 * self.dirs[2] / n,
-            "by_DF": 100 * self.line["DF"] / field, "by_MF": 100 * self.line["MF"] / field, "by_FW": 100 * self.line["FW"] / field,
+            "by_DF": 100 * self.line["DF"] / field / per_line["DF"], "by_MF": 100 * self.line["MF"] / field / per_line["MF"],
+            "by_FW": 100 * self.line["FW"] / field / per_line["FW"],
             "acc_own": 100 * self.third_ok[0] / max(1, self.third_n[0]),
             "acc_mid": 100 * self.third_ok[1] / max(1, self.third_n[1]),
             "acc_final": 100 * self.third_ok[2] / max(1, self.third_n[2]),
@@ -75,6 +80,17 @@ def real_spatial(use_cache: bool = True) -> dict[str, float]:
     roles = {p["wyId"]: ROLE.get(p["role"]["code2"], "MF") for p in json.loads((DATA / "players.json").read_text(encoding="utf-8"))}
     acc = Acc()
     zf = zipfile.ZipFile(DATA / "events.zip")
+    mz = zipfile.ZipFile(DATA / "matches.zip")
+    lines, teams = defaultdict(float), 0
+    for lg in LEAGUES:
+        for m in json.loads(mz.read(f"matches_{lg}.json")):
+            for td in m["teamsData"].values():
+                lineup = td["formation"]["lineup"]
+                if len(lineup) == 11:
+                    teams += 1
+                    for p in lineup:
+                        lines[roles.get(p["playerId"], "MF")] += 1
+    per_line = {k: lines[k] / teams for k in ("DF", "MF", "FW")}  # Wyscout files most wingers as midfielders: about 4.0 / 3.8 / 2.1
     for lg in LEAGUES:
         for e in json.loads(zf.read(f"events_{lg}.json")):
             pos, name = e["positions"], e["eventName"]
@@ -83,7 +99,7 @@ def real_spatial(use_cache: bool = True) -> dict[str, float]:
                 acc.add_pass(roles.get(e["playerId"], "MF"), pos[0]["x"], pos[0]["y"], pos[1]["x"], ok)
             elif name == "Shot" and pos:
                 acc.add_shot(pos[0]["x"], pos[0]["y"])
-    out = acc.summary()
+    out = acc.summary(per_line)
     CACHE.write_text(json.dumps(out))
     return out
 
@@ -91,7 +107,11 @@ def real_spatial(use_cache: bool = True) -> dict[str, float]:
 def sim_spatial(home: str = "Balanced 4-3-3", away: str = "Balanced 4-3-3", n: int = 40, seed0: int = 0) -> dict[str, float]:
     from .simulator.match import MatchSimulator
 
+    from .tactics import get_formation, resolve_tactic
+
     acc = Acc()
+    lines = [sl[3] for t in (home, away) for sl in get_formation(resolve_tactic(t).formation)]
+    per_line = {k: lines.count(k) / 2 for k in ("DF", "MF", "FW")}
     for s in range(seed0, seed0 + n):
         sim = MatchSimulator(seed=s, home_tactic=home, away_tactic=away, record_frames=False)
         line = {p.id: p.position for t in sim.teams.values() for p in t.players}
@@ -100,13 +120,15 @@ def sim_spatial(home: str = "Balanced 4-3-3", away: str = "Balanced 4-3-3", n: i
                 acc.add_pass(line.get(e.player, "MF"), e.x, e.y, e.end_x, e.outcome == "success")
             elif e.type == "shot":
                 acc.add_shot(e.x, e.y)
-    return acc.summary()
+    return acc.summary(per_line)
 
 
 ROWS = [  # key, label, tolerance (absolute, in the unit of the row)
-    ("own_third", "passes starting in own third %", 4.0), ("y_std", "spread of pass start y (std)", 2.0), ("wide", "passes starting wide %", 5.0),
+    ("own_third", "passes starting in own third %", 4.0), ("final_third", "passes starting in final third %", 3.0),
+    ("deep", "passes starting in the last 20 units %", 2.0), ("y_std", "spread of pass start y (std)", 2.0), ("wide", "passes starting wide %", 5.0),
     ("fwd", "forward passes %", 4.0), ("back", "backward passes %", 4.0), ("lat", "lateral passes %", 4.0),
-    ("by_DF", "passes by defenders %", 4.0), ("by_MF", "passes by midfielders %", 4.0), ("by_FW", "passes by forwards %", 3.0),
+    ("by_DF", "passes per defender (% of team)", 1.0), ("by_MF", "passes per midfielder (% of team)", 1.0),
+    ("by_FW", "passes per forward (% of team)", 1.0),
     ("acc_own", "accuracy, own third %", 3.0), ("acc_mid", "accuracy, middle third %", 3.0), ("acc_final", "accuracy, final third %", 3.0),
     ("shot_dist", "mean shot distance (m)", 1.5), ("shots_in_box", "shots from inside the box %", 6.0)]
 

@@ -131,6 +131,68 @@ def real_rows(use_cache: bool = True) -> dict:
     return out
 
 
+FORMATIONS = ("4-4-2", "4-3-3", "4-5-1", "5-3-2", "5-4-1", "3-5-2", "3-4-3")
+
+
+def real_formation_effects(use_cache: bool = True) -> dict[str, dict[str, float]]:
+    """Share of the passes by formation in real matches, once the strength gap is accounted for.
+
+    The formation is read from the starting line-up: number of defenders, midfielders and forwards as filed by Wyscout (a player's usual
+    role, not his role in that match, so this is an approximation). Effect = mean of (share - share expected from the gap alone)."""
+    f = DATA / "real_formations.json"
+    if use_cache and f.exists():
+        return json.loads(f.read_text())
+    roles = {p["wyId"]: p["role"]["code2"] for p in json.loads((DATA / "players.json").read_text(encoding="utf-8"))}
+    mz, ez = zipfile.ZipFile(DATA / "matches.zip"), zipfile.ZipFile(DATA / "events.zip")
+    gaps, shares, shapes = [], [], []
+    for lg in LEAGUES:
+        res, shape = [], {}
+        for m in json.loads(mz.read(f"matches_{lg}.json")):
+            td = m["teamsData"]
+            h = next(v for v in td.values() if v["side"] == "home")
+            a = next(v for v in td.values() if v["side"] == "away")
+            res.append((h["teamId"], a["teamId"], int(h["score"]), int(a["score"]), m["wyId"]))
+            for t in (h, a):
+                c = defaultdict(int)
+                for p in t["formation"]["lineup"]:
+                    c[roles.get(p["playerId"], "?")] += 1
+                shape[(m["wyId"], t["teamId"])] = f"{c['DF']}-{c['MD']}-{c['FW']}"
+        att, de, mu, hadv = fit_poisson([r[:4] for r in res])
+        st = {t: att[t] + de[t] for t in att}
+        passes: dict[tuple, int] = defaultdict(int)
+        for e in json.loads(ez.read(f"events_{lg}.json")):
+            if e["eventName"] == "Pass":
+                passes[(e["matchId"], e["teamId"])] += 1
+        for ht, at, hg, ag, mid in res:
+            for me, op, home in ((ht, at, True), (at, ht, False)):
+                gaps.append(st[me] - st[op] + (hadv if home else -hadv))
+                shares.append(100 * passes[(mid, me)] / max(1, passes[(mid, me)] + passes[(mid, op)]))
+                shapes.append(shape[(mid, me)])
+    g, y, sh = np.array(gaps), np.array(shares), np.array(shapes)
+    b = np.polyfit(g, y, 1)
+    resid = y - np.polyval(b, g)
+    out = {fm: {"n": int((sh == fm).sum()), "effect": float(resid[sh == fm].mean()), "se": float(resid[sh == fm].std() / np.sqrt((sh == fm).sum()))}
+           for fm in FORMATIONS if (sh == fm).sum() >= 50}
+    f.write_text(json.dumps(out))
+    return out
+
+
+def sim_formation_effects(n: int = 40, workers: int = 14) -> dict[str, float]:
+    """Share of the passes of each formation (balanced instructions) against a pool of the common real shapes, minus 50."""
+    jobs, keys = [], []
+    opponents = ("4-4-2", "4-3-3", "4-5-1")
+    for fm in FORMATIONS:
+        for op in opponents:
+            for k in range(0, n, 10):
+                jobs.append((1.0, 1.0, list(range(9000 + k, 9000 + k + 10)), {"name": fm, "formation": fm}, {"name": op, "formation": op}))
+                keys.append(fm)
+    out: dict[str, list[float]] = defaultdict(list)
+    with ProcessPoolExecutor(workers) as ex:
+        for fm, rows in zip(keys, ex.map(_sim_job, jobs)):
+            out[fm].extend(r["pass_share"] for r in rows)
+    return {fm: float(np.mean(v)) - 50.0 for fm, v in out.items()}
+
+
 def _sim_job(args):
     from .simulator.match import MatchSimulator
 

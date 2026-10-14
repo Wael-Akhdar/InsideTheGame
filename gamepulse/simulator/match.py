@@ -38,8 +38,8 @@ SHAPE = {"ball_shift_x": 0.3, "ball_shift_y": 0.2, "lh_in": 10.0, "lh_out": 24.0
          "gk_base": 5.0, "gk_ball": 0.08, "ax_scale": 1.0, "off_df": 0.0, "off_mf": 0.0, "off_fw": 0.0}
 
 
-PASS = {"wide": 16.0, "dir_base": 1.875, "lateral": 0.9, "fw_back": 0.586, "back": 0.374, "dist_scale": 0.4, "dist_base": 9.0, "dist_dir": 6.0, "acc_len": 1.0, "rw_gk": 1.0, "rw_df": 1.5,
-        "rw_mf": 1.0, "rw_fw": 0.25, "own_keep": 7.5, "fin_back": 0.375, "fwd_cap": 100.0}  # receiver weights, see _pass
+PASS = {"wide": 17.006, "dir_base": 1.861, "lateral": 0.764, "fw_back": 0.569, "back": 0.227, "dist_scale": 0.465, "dist_base": 9.0, "dist_dir": 6.0, "acc_len": 1.0, "rw_gk": 1.0, "rw_df": 2.101,
+        "rw_mf": 0.887, "rw_fw": 0.086, "own_keep": 7.416, "fin_back": 0.231, "fwd_cap": 100.0, "carry": 0.705}  # receiver weights, see _pass
 LEN_X = [0, 5, 15, 25, 35, 45, 60]
 LEN_ADJ = [0.0, -0.05, 0.05, 0.06, 0.04, -0.03, -0.23]
 def _third(x: float) -> int:
@@ -47,19 +47,23 @@ def _third(x: float) -> int:
 
 
 # Pass accuracy adjustment by (third the pass starts in, third it ends in), team frame: backward and sideways passes are safe, passes into the final third are not
+ACC_X = [5, 15, 26, 41, 58, 71, 79, 88, 96]  # start x of the pass (team frame), centres of the bands measured on real passes
+ACC_X_ADJ = [-0.08, -0.07, -0.03, -0.01, 0.01, 0.07, -0.02, -0.13, -0.30]
 ACC_TABLE = [[0.02, 0.04, 0.0], [0.08, 0.06, -0.10], [0.12, 0.09, -0.15]]
 
 
-SHOT = {"p": 0.081, "box_near": 3.287}  # shooting propensity: base rate and the factor inside the box up to the six-yard line
-QUALITY = {"pass": 0.004, "def": 0.006}  # per attribute point: passer's technique and the defending side's reading of the game, on pass success
+SHOT = {"p": 0.091, "box_near": 3.943, "finish": 1.306, "attr": 1.0}  # shooting propensity: base rate and the factor inside the box up to the six-yard line
+QUALITY = {"pass": 0.004, "def": 0.006, "fin": 1.0, "keep": 0.0}  # per attribute point: passer's technique and the defending side's reading of the game, on pass success
 QUALITY_PER_GAP = 0.15  # squad quality gap per unit of real strength gap (log-goal ratio), see gamepulse/strength.py
 GOALSIDE = {"on": True, "df": 3.0}  # defending: the back line keeps goal-side of the ball
 MOVE = {"in": 0.7, "out": 1.0, "speed": 5.0, "react": 1.0}  # share of the gap to its target a player closes in one tick (attacking / defending)
+PINNED = 0.0  # how far a side's lines drop per unit of recent ball share below one half
+BLOCK = {"ref": 5.5, "acc": 0.0, "entry": 0.0, "shot": 0.0, "shot_ref": 3.0}  # pass accuracy per defender goal-side of the ball, relative to a typical block
 TEMPO_STYLE = 0.0  # how much a patient style raises the number of actions per match
+DUEL = {"win": 0.42}  # base chance that a tackle attempt wins the ball
 TACKLE = 1.0  # scale of the tackle attempts by the closest defender
-CARRY = 1.0  # scale of the share of actions where the carrier runs with the ball
 REGAIN = {"go_to_ball": True}
-CLEAR = {"p": 0.0, "x": 30.0, "win": 0.45}  # clearances: under pressure in its own third a team hoofs the ball long and the second ball is contested
+CLEAR = {"p": 0.17, "x": 30.0, "win": 0.35, "q": 0.0}  # clearances: under pressure in its own third a team hoofs the ball long and the second ball is contested
 
 
 def _load_correction():
@@ -67,7 +71,7 @@ def _load_correction():
     return json.loads(f.read_text())["table"] if f.exists() else None
 
 
-WANDER = {"sx": 16.875, "sy": 16.0, "tau": 40.0, "out": 1.0}  # players drift around their target (runs, drops): sd in pitch units and time constant in seconds
+WANDER = {"sx": 14.109, "sy": 17.565, "tau": 40.0, "out": 1.0}  # players drift around their target (runs, drops): sd in pitch units and time constant in seconds
 CORRECTION = _load_correction()  # how far real lines stand from the uncorrected model, by phase, line and ball depth (tools/build_shape_correction.py)
 
 
@@ -78,7 +82,7 @@ def shape_targets(S, has_ball: bool, bx: float, by: float, params: dict | None =
     this is the part of the simulator that can be compared with real tracking data frame by frame."""
     P = params or SHAPE
     tac = S.tac
-    lh = tac.line_height
+    lh = _clamp(tac.line_height + PINNED * (getattr(S, "share", 0.5) - 0.5), 0.0, 1.0)  # a side that rarely has the ball is pushed back
     if has_ball:
         tx = S.base[:, 0] + P["ball_shift_x"] * (bx - 50) + P["ax_scale"] * S.ax * (0.6 + 0.4 * tac.tempo) + (lh - 0.5) * P["lh_in"]
         support = P["support"] * (1 - tac.directness)  # short build-up: players close in on the ball to offer passing options
@@ -129,6 +133,7 @@ class _Side:
         self.fat = 1.0
         self.pressers: list[int] = []
         self.wander = np.zeros((11, 2))
+        self.share = 0.5  # recent share of the ball (exponential average): a side that rarely has it gets pushed back
         out = [p for p, g in zip(team.players, self.gk) if not g]
         self.def_q = float(np.mean([(p.attrs["tackling"] + p.attrs["pace"]) / 2 for p in out]))  # how well the side reads and closes passing lanes
 
@@ -259,6 +264,9 @@ class MatchSimulator:
         me = P.pos[c]
         self.ball = self._glob(P, me)
         self.poss_time[P.id] += dt
+        a = 1 - math.exp(-dt / 300.0)
+        P.share += a * (1 - P.share)
+        D.share -= a * D.share
 
         opp = self._opp_view(D)
         d = self._dists_m(me, opp)
@@ -286,7 +294,7 @@ class MatchSimulator:
                         evs.append(self._ev(t, "card", D.id, player=D.team.players[j].id, outcome="red"))
                     return
                 tk = D.attr(j, "tackling")
-                won = rng.random() < _clamp(0.42 + (tk - P.attr(c, "dribbling")) / 200, 0.15, 0.75)
+                won = rng.random() < _clamp(DUEL["win"] + (tk - P.attr(c, "dribbling")) / 200, 0.05, 0.75)
                 evs.append(self._ev(t, "tackle", D.id, player=D.team.players[j].id, x=float(D.pos[j, 0]), y=float(D.pos[j, 1]),
                                     outcome="won" if won else "lost", meta={"against": P.team.players[c].id}))
                 if won:
@@ -298,12 +306,13 @@ class MatchSimulator:
         in_box = fx > 84 and abs(fy - 50) < 24
         central = abs(fy - 50) < 22
         zone = (SHOT["box_near"] if in_box and fx < 92 else 1.7 if in_box else 1.0 if (fx > 76 and central) else 0.5 if fx > 76 else 0.2 if fx > 66 else 0.0)
-        shoot_p = SHOT["p"] * (0.5 + 0.5 * role["sh"]) * zone * (0.7 + 0.3 * P.attr(c, "shooting") / 70)
+        block = _clamp(math.exp(-BLOCK["shot"] * (self._behind(D, fx) - BLOCK["shot_ref"])), 0.6, 1.5) if BLOCK["shot"] and fx > 66.7 else 1.0
+        shoot_p = block * SHOT["p"] * (0.5 + 0.5 * role["sh"]) * zone * (0.7 + 0.3 * (70 + SHOT["attr"] * (P.attr(c, "shooting") - 70)) / 70)
         drib_p = 0.07 * role["dr"] * (P.attr(c, "dribbling") / 70) * (1.4 if dmin < 9 else 0.7)
         # patient teams also move the ball forward by carrying it into open space (safe territorial gain)
         ahead = opp[opp[:, 0] > fx - 2]
         space = float(self._dists_m(me, ahead).min()) if len(ahead) else 40.0
-        carry_p = CARRY * (0.26 * (1 - P.tac.directness) + 0.03) * (1.0 if space > 6.5 else 0.0) * (0.0 if P.gk[c] or fx > 82 else 1.0)
+        carry_p = PASS["carry"] * (0.26 * (1 - P.tac.directness) + 0.03) * (1.0 if space > 6.5 else 0.0) * (0.0 if P.gk[c] or fx > 82 else 1.0)
         r = rng.random()
         if r < shoot_p:
             self._shoot(P, D, t, evs, pressure)
@@ -317,6 +326,11 @@ class MatchSimulator:
             self._dribble(P, D, t, evs, j, dmin)
         else:
             self._pass(P, D, t, evs, opp, pressure)
+
+    @staticmethod
+    def _behind(D: _Side, fx: float) -> int:
+        """Outfield defenders between the ball and their own goal: the block in front of the attack."""
+        return int(np.sum(D.active & ~D.gk & (D.pos[:, 0] < 100.0 - fx)))
 
     def _turnover(self, D: _Side, j: int, t: float, evs: list[Event], reason: str):
         evs.append(self._ev(t, "possession_change", D.id, player=D.team.players[j].id,
@@ -345,9 +359,10 @@ class MatchSimulator:
         me = P.pos[c]
         role = P.roles[c]
         directness = P.tac.directness
-        if me[0] < CLEAR["x"] and not P.gk[c] and rng.random() < CLEAR["p"] * min(pressure, 2.0) * (0.5 + directness):
+        if me[0] < CLEAR["x"] and not P.gk[c] and rng.random() < CLEAR["p"] * min(pressure, 2.0) * (0.5 + directness) * (1 + CLEAR["q"] * (D.def_q - P.def_q)):
             return self._clear(P, D, t, evs, opp)
         cands, weights = [], []
+        entry = math.exp(-BLOCK["entry"] * max(0, self._behind(D, float(me[0])) - BLOCK["ref"])) if BLOCK["entry"] and me[0] <= 66.7 else 1.0
         for i in range(11):
             if i == c or not P.active[i]:
                 continue
@@ -369,7 +384,9 @@ class MatchSimulator:
                 w *= PASS["lateral"]  # sideways passes keep the ball moving across the pitch
             if fwd < -5 and P.line[c] == "FW":
                 w *= PASS["fw_back"]  # forwards lay the ball off less than midfielders recycle it
-            w *= PASS["rw_" + P.team.players[i].position.lower()]  # how often each line is the target of a pass
+            w *= PASS["rw_" + P.team.players[i].position.lower()]
+            if rp[0] > 66.7 and me[0] <= 66.7:
+                w *= entry  # facing a packed block, teams recycle the ball rather than force it into the final third  # how often each line is the target of a pass
             if fwd < -5:
                 w *= PASS["back"] ** (0.2 + 1.6 * directness)  # backward passes: patient teams recycle, direct teams hardly ever go back
             if me[0] < 33.3 and rp[0] < 33.3:
@@ -387,9 +404,12 @@ class MatchSimulator:
                 cands, weights = [k for k, _ in longs], [w for _, w in longs]
         i, fwd, dm, open_r = rng.choices(cands, weights=[w ** 0.65 for w in weights])[0]  # flatter: passing is spread over the whole team
         p = (1.19 - 0.10 * (P.tac.tempo - 0.5) - 0.0066 * dm * (1.2 - P.attr(c, "vision") / 150) - 0.11 * min(pressure * (0.6 + 0.8 * D.tac.pressing), 2.0)
-             - 0.17 * (1 - open_r / 14) + (P.attr(c, "passing") - 70) * QUALITY["pass"] - (D.def_q - 70) * QUALITY["def"]
+             - 0.17 * (1 - open_r / 14) + ((P.attr(c, "passing") - 70) * (QUALITY["pass"] + (QUALITY["keep"] if P.pos[i, 0] <= 66.7 else 0.0)) - (D.def_q - 70) * QUALITY["def"]) * (QUALITY["fin"] if P.pos[i, 0] > 66.7 else 1.0)
              - 0.15 * max(0.0, fwd) / 40 * (1 - max(0.0, role["sf"])) + 0.04 * self._numeric(P, D))
         p += PASS["acc_len"] * float(np.interp(dm, LEN_X, LEN_ADJ))  # real accuracy by pass length: safest at 10-30 m, long balls often lost
+        if P.pos[i, 0] > 66.7 and BLOCK["acc"]:  # a deep, packed block makes passes into the final third harder; a broken one easier
+            p -= BLOCK["acc"] * (self._behind(D, float(me[0])) - BLOCK["ref"])
+        p += float(np.interp(me[0], ACC_X, ACC_X_ADJ))  # finer: crosses from near the goal line and long kicks from the own box are often lost
         p += ACC_TABLE[_third(float(me[0]))][_third(float(P.pos[i, 0]))]  # real accuracy by (third the pass starts in, third it ends in)
         ok = rng.random() < _clamp(p, 0.3, 0.97)
         rp = P.pos[i]
@@ -410,7 +430,8 @@ class MatchSimulator:
             self._turnover(D, j, t, evs, "interception")
 
     def _clear(self, P: _Side, D: _Side, t: float, evs: list[Event], opp: np.ndarray):
-        """A long clearance: the ball lands 30-50 units upfield and whoever is closer to the second ball may win it."""
+        """A clearance under pressure: the ball lands 30-50 units upfield and the second ball is contested. Not a pass (as in the
+        event data, where clearances are counted apart)."""
         rng, c = self.rng, self.c
         me = P.pos[c]
         land = np.array([min(92.0, me[0] + rng.uniform(30, 50)), _clamp(float(me[1]) + rng.uniform(-28, 28), 4, 96)])
@@ -418,10 +439,9 @@ class MatchSimulator:
         mate = min(mine, key=lambda i: float(np.hypot(*((P.pos[i] - land) * [KX, KY])))) if mine else c
         dm = math.hypot((land[0] - me[0]) * KX, (land[1] - me[1]) * KY)
         ok = rng.random() < _clamp(CLEAR["win"] + 0.04 * self._numeric(P, D), 0.2, 0.7)
-        evs.append(self._ev(t, "pass", P.id, player=P.team.players[c].id, x=float(me[0]), y=float(me[1]), end_x=float(land[0]), end_y=float(land[1]),
-                            outcome="success" if ok else "fail", speed_kmh=round(rng.uniform(70, 100), 1),
-                            meta={"distance_m": round(dm, 1), "forward": True, "clearance": True,
-                                  "receiver": P.team.players[mate].id if ok else None}))
+        evs.append(self._ev(t, "clearance", P.id, player=P.team.players[c].id, x=float(me[0]), y=float(me[1]), end_x=float(land[0]),
+                            end_y=float(land[1]), outcome="success" if ok else "fail", speed_kmh=round(rng.uniform(70, 100), 1),
+                            meta={"distance_m": round(dm, 1), "receiver": P.team.players[mate].id if ok else None}))
         if ok:
             P.pos[mate] = land
             self.c = mate
@@ -443,7 +463,7 @@ class MatchSimulator:
         finishing = P.attr(c, "shooting") / 70
         keeper = D.attr(0, "keeping") / 75
         roll = rng.random()
-        if roll < xg * finishing / keeper * 1.12:
+        if roll < xg * finishing / keeper * SHOT["finish"]:
             outcome = "goal"
         else:
             r2 = rng.random()
