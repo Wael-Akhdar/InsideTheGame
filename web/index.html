@@ -73,7 +73,9 @@
   <div class="bar">
     <label class="f">Data source <select id="mSource"><option value="sim">Simulated match</option><option value="sportec">Real match with tracking (Bundesliga)</option><option value="Spain">Real match: Spain</option><option value="Italy">Real match: Italy</option><option value="France">Real match: France</option><option value="Germany">Real match: Germany</option><option value="England">Real match: England</option></select></label>
     <label class="f">Home tactic <select id="mHome"></select></label>
+    <label class="f">Home level <select id="mHomeLvl" class="lvl"></select></label>
     <label class="f">Away tactic <select id="mAway"></select></label>
+    <label class="f">Away level <select id="mAwayLvl" class="lvl"></select></label>
     <label class="f">View <select id="mMode"><option value="casual">Casual fan</option><option value="analyst">Analyst</option></select></label>
     <label class="f">Language <select id="mLang"><option value="en">English</option><option value="fr">Français</option><option value="es">Español</option><option value="ar">العربية</option></select></label>
     <label class="f">Scenario <select id="mScn"></select></label>
@@ -158,6 +160,8 @@
     <div class="card">
       <h3>Your tactic</h3>
       <select id="lTactic" style="width:100%"></select>
+      <label class="f" style="margin-top:8px">Your level <select id="lLvl" class="lvl"></select></label>
+      <label class="f">Opponents' level <select id="lOppLvl" class="lvl"></select></label>
       <h3 style="margin-top:16px">Opponents <span><a href="#" id="lAll" style="color:var(--accent);font-size:11px">all</a></span></h3>
       <div id="lOpps"></div>
       <h3 style="margin-top:16px">Scenario to test</h3>
@@ -406,6 +410,7 @@ $("go").onclick = () => {
   curSid = Math.random().toString(36).slice(2);
   const q = new URLSearchParams({ home: tacticParam(selVal($("mHome"))), away: tacticParam(selVal($("mAway"))), mode: $("mMode").value,
                                   lang: $("mLang").value, speed: $("mSpeed").value, seed: parseInt($("mSeed").value) || 42, sid: curSid });
+  q.set("home_level", $("mHomeLvl").value); q.set("away_level", $("mAwayLvl").value);
   const sc = currentScenario("mScn", mScn); if (sc) q.set("scenario", JSON.stringify(sc));
   const src = $("mSource").value; if (src === "sportec") q.set("source", "sportec"); else if (src !== "sim") { q.set("source", "wyscout"); q.set("league", src); }
   markers = [];
@@ -556,7 +561,8 @@ $("lRun").onclick = async () => {
   btn.disabled = true; btn.textContent = "Simulating…";
   const total = opps.length * $("lN").value * (compare ? 2 : 1);
   $("lOut").innerHTML = `<div class="card" style="color:var(--mute)">Simulating ${total} matches…</div>`;
-  const body = { tactic: all[name], opponents: opps.map(o => all[o]), n: +$("lN").value, scenario: scn };
+  const body = { tactic: all[name], opponents: opps.map(o => all[o]), n: +$("lN").value, scenario: scn,
+                 level: $("lLvl").value, opponent_level: $("lOppLvl").value };
   try {
     if (compare) renderWhatIf(await post("/api/lab/whatif", body));
     else renderLab(await post("/api/lab/run", body));
@@ -595,6 +601,8 @@ function renderWhatIf(r) {
 /* ---------------------------------------------------------------- boot */
 fetch("/api/catalog").then(r => r.json()).then(c => {
   catalog = c; refreshSelectors();
+  document.querySelectorAll("select.lvl").forEach(sel => sel.innerHTML = Object.entries(c.levels)
+    .map(([k, v]) => `<option value="${k}" ${k === "mid" ? "selected" : ""}>${v.label}</option>`).join(""));
   fillScenarioSelect($("mScn")); fillScenarioSelect($("lScn"));
   $("lcForm").innerHTML = formOptions("4-3-3");
   newEd(c.presets.find(t => t.name === "Balanced 4-3-3"));

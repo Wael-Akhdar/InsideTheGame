@@ -13,6 +13,7 @@ from fastapi.responses import FileResponse, StreamingResponse
 from ..agents.interpreter import interpret_role, interpret_scenario
 from ..agents.pipeline import Orchestrator, Viewer
 from ..overlay import build_feed, export_overlay
+from ..strength import LEVELS, quality_for
 from ..lab import evaluate, what_if
 from ..scenario import PRESET_SCENARIOS, describe_rule, sanitize
 from ..feed import SimulatorFeed
@@ -48,6 +49,7 @@ def index():
 @app.get("/api/catalog")
 def catalog():
     cat = describe_catalog()
+    cat["levels"] = {k: {"strength": v[0], "label": v[1]} for k, v in LEVELS.items()}
     cat["scenarios"] = {k: {**v, "explain": [describe_rule(r) for r in v["rules"]]} for k, v in PRESET_SCENARIOS.items()}
     return cat
 
@@ -87,7 +89,8 @@ def wyscout_matches(league: str):
 async def stream(seed: int = 42, speed: float = 60.0, mode: str = "casual", lang: str = "en",
                  home: Optional[str] = None, away: Optional[str] = None, scenario: Optional[str] = None,
                  source: str = "sim", league: str = "Spain",
-                 sid: Optional[str] = None, team: Optional[str] = None, player: Optional[str] = Query(None)):
+                 sid: Optional[str] = None, team: Optional[str] = None, player: Optional[str] = Query(None),
+                 home_level: Optional[str] = None, away_level: Optional[str] = None):
     speed = max(1.0, min(speed, 2000.0))
     scn = None
     if scenario:
@@ -109,7 +112,7 @@ async def stream(seed: int = 42, speed: float = 60.0, mode: str = "casual", lang
             raise HTTPException(404, str(e))
     else:
         feed = SimulatorFeed(seed=seed, home_tactic=_spec(home, "Possession 4-3-3"), away_tactic=_spec(away, "Counter-attack 4-4-2"),
-                             scenario=scn)
+                             scenario=scn, home_quality=quality_for(home_level), away_quality=quality_for(away_level))
     sim = getattr(feed, "sim", None)  # live coaching only exists for simulated matches
     sess = {"speed": speed, "paused": False, "queue": []}
     if sid:
@@ -199,7 +202,7 @@ async def lab_whatif(body: dict = Body(...)):
     scn = interpret_scenario(body["text"]) if body.get("text") else sanitize(body.get("scenario"))
     opponents = body.get("opponents") or [p for p in PRESETS.values() if p.name != tactic.name]
     n = max(4, min(int(body.get("n", 20)), 60))
-    res = await run_in_threadpool(what_if, tactic, scn, opponents[:6], n)
+    res = await run_in_threadpool(what_if, tactic, scn, opponents[:6], n, 1000, body.get("level"), body.get("opponent_level"))
     res["explain"] = [describe_rule(r) for r in scn["rules"]]
     return res
 
@@ -211,4 +214,4 @@ async def lab_run(body: dict = Body(...)):
     opponents = body.get("opponents") or [p for p in PRESETS.values() if p.name != tactic.name]
     n = max(4, min(int(body.get("n", 20)), 60))
     scn = sanitize(body["scenario"]) if body.get("scenario") else None
-    return await run_in_threadpool(evaluate, tactic, opponents[:10], n, 1000, None, scn)
+    return await run_in_threadpool(evaluate, tactic, opponents[:10], n, 1000, None, scn, body.get("level"), body.get("opponent_level"))

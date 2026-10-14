@@ -17,10 +17,12 @@ def play_one(args: tuple) -> dict[str, Any]:
     In a scenario, "home" always means the coach's team (mirrored when it plays away)."""
     mine, other, seed, mine_home = args[:4]
     scn = args[4] if len(args) > 4 else None
+    q_mine, q_other = (args[5], args[6]) if len(args) > 6 else (1.0, 1.0)
     h, a = (mine, other) if mine_home else (other, mine)
     if scn and not mine_home:
         scn = mirror(scn)
-    sim = MatchSimulator(seed=seed, home_tactic=h, away_tactic=a, record_frames=False, scenario=scn)
+    qh, qa = (q_mine, q_other) if mine_home else (q_other, q_mine)
+    sim = MatchSimulator(seed=seed, home_tactic=h, away_tactic=a, record_frames=False, scenario=scn, home_quality=qh, away_quality=qa)
     me, op = (HOME, AWAY) if mine_home else (AWAY, HOME)
     m = {k: 0.0 for k in ("gf", "ga", "xgf", "xga", "shf", "sha", "pass_f", "pass_ok_f", "pass_a", "tackles_f", "press_f",
                           "fouls_f", "late_ga", "late_gf", "red_f")}
@@ -75,8 +77,12 @@ def _aggregate(name: str, rows: list[dict[str, float]]) -> dict[str, Any]:
 
 
 def evaluate(tactic: Any, opponents: list[Any] | None = None, n: int = 20, base_seed: int = 1000,
-             workers: int | None = None, scenario: Any = None) -> dict[str, Any]:
-    """Play `n` matches (half at home, half away) against each opponent and summarise."""
+             workers: int | None = None, scenario: Any = None, level: Any = None, opponent_level: Any = None) -> dict[str, Any]:
+    """Play `n` matches (half at home, half away) against each opponent and summarise.
+    `level` / `opponent_level`: squad levels (see gamepulse.strength.LEVELS), mid-table by default."""
+    from .strength import quality_for
+
+    q_mine, q_other = quality_for(level), quality_for(opponent_level)
     mine: Tactic = resolve_tactic(tactic)
     scn = sanitize(scenario) if scenario else None
     if scn is not None and not scn["rules"]:
@@ -85,7 +91,7 @@ def evaluate(tactic: Any, opponents: list[Any] | None = None, n: int = 20, base_
     jobs, owners = [], []
     for oi, o in enumerate(opps):
         for k in range(n):
-            jobs.append((mine.to_dict(), o.to_dict(), base_seed + oi * 10_000 + k, k % 2 == 0, scn))
+            jobs.append((mine.to_dict(), o.to_dict(), base_seed + oi * 10_000 + k, k % 2 == 0, scn, q_mine, q_other))
             owners.append(oi)
     workers = workers or min(os.cpu_count() or 2, 8)
     if workers > 1 and len(jobs) > 8:
@@ -99,6 +105,7 @@ def evaluate(tactic: Any, opponents: list[Any] | None = None, n: int = 20, base_
     best = max(per, key=lambda p: p["ppg"])
     return {
         "tactic": mine.to_dict(), "n": n, "scenario": scn["name"] if scn else None, "overall_ppg": overall_ppg,
+        "level": level or "mid", "opponent_level": opponent_level or "mid",
         "robustness": round(100 * overall_ppg / 3),  # 0-100: share of the maximum points per game
         "worst": worst["opponent"], "best": best["opponent"], "matchups": per,
         "insights": insights(mine, per),
@@ -137,13 +144,14 @@ def insights(t: Tactic, per: list[dict[str, Any]]) -> list[dict[str, str]]:
     return out
 
 
-def what_if(tactic: Any, scenario: Any, opponents: list[Any] | None = None, n: int = 20, base_seed: int = 1000) -> dict[str, Any]:
+def what_if(tactic: Any, scenario: Any, opponents: list[Any] | None = None, n: int = 20, base_seed: int = 1000,
+            level: Any = None, opponent_level: Any = None) -> dict[str, Any]:
     """Replay the same seeds with and without a scenario ("what if I had changed X at minute 60?").
 
     A match is deterministic for a given seed, so baseline and what-if are identical until the first scripted
     action fires: every difference afterwards is caused by the change."""
-    base = evaluate(tactic, opponents, n, base_seed)
-    alt = evaluate(tactic, opponents, n, base_seed, scenario=scenario)
+    base = evaluate(tactic, opponents, n, base_seed, level=level, opponent_level=opponent_level)
+    alt = evaluate(tactic, opponents, n, base_seed, scenario=scenario, level=level, opponent_level=opponent_level)
     rows = []
     for b, a in zip(base["matchups"], alt["matchups"]):
         rows.append({"opponent": b["opponent"], "ppg_before": b["ppg"], "ppg_after": a["ppg"], "delta_ppg": round(a["ppg"] - b["ppg"], 2),
