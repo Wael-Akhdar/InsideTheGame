@@ -38,7 +38,7 @@ SHAPE = {"ball_shift_x": 0.3, "ball_shift_y": 0.2, "lh_in": 10.0, "lh_out": 24.0
          "gk_base": 5.0, "gk_ball": 0.08, "ax_scale": 1.0, "off_df": 0.0, "off_mf": 0.0, "off_fw": 0.0}
 
 
-PASS = {"wide": 8.0, "dir_base": 1.875, "lateral": 0.9, "fw_back": 0.586, "back": 0.374, "dist_scale": 0.4, "acc_len": 1.0, "rw_gk": 1.0, "rw_df": 1.5,
+PASS = {"wide": 8.0, "dir_base": 1.875, "lateral": 0.9, "fw_back": 0.586, "back": 0.374, "dist_scale": 0.4, "dist_base": 9.0, "dist_dir": 6.0, "acc_len": 1.0, "rw_gk": 1.0, "rw_df": 1.5,
         "rw_mf": 1.0, "rw_fw": 0.25, "own_keep": 7.5, "fin_back": 0.375, "fwd_cap": 100.0}  # receiver weights, see _pass
 LEN_X = [0, 5, 15, 25, 35, 45, 60]
 LEN_ADJ = [0.0, -0.05, 0.05, 0.06, 0.04, -0.03, -0.23]
@@ -51,6 +51,7 @@ ACC_TABLE = [[0.02, 0.04, 0.0], [0.08, 0.06, -0.10], [0.12, 0.09, -0.15]]
 
 
 SHOT = {"p": 0.069, "box_near": 3.287}  # shooting propensity: base rate and the factor inside the box up to the six-yard line
+TEMPO_STYLE = 0.0  # how much a patient style raises the number of actions per match
 TACKLE = 1.0  # scale of the tackle attempts by the closest defender
 CARRY = 1.0  # scale of the share of actions where the carrier runs with the ball
 REGAIN = {"go_to_ball": True}
@@ -350,7 +351,7 @@ class MatchSimulator:
             open_r = min(14.0, float(self._dists_m(rp, opp).min()))
             w_dir = PASS["dir_base"] + 1.0 * directness + 1.2 * role["fw"]
             w = math.exp(min(fwd, PASS["fwd_cap"]) / 22 * w_dir) * (0.35 + open_r / 14) ** (1 + 0.8 * (1 - directness))  # patient teams only find the free man
-            w *= math.exp(-dm / (PASS["dist_scale"] * (5 + 14 * directness + P.attr(c, "vision") / 12)))
+            w *= math.exp(-dm / (PASS["dist_scale"] * (PASS["dist_base"] + PASS["dist_dir"] * directness + P.attr(c, "vision") / 12)))
             if fwd < 0:  # recycling the ball is what patient teams do under pressure
                 w *= 1 + 2.0 * (1 - directness) * max(0.0, min(pressure, 2.0) - 0.3)
             if fwd > 0:
@@ -570,7 +571,7 @@ class MatchSimulator:
                 yield Tick(t, self._frame(t), [self._ev(t, "halftime", self.away.id)])
                 continue
             tempo = self.sides[self.poss].tac.tempo
-            dt = (7.6 - 4.2 * tempo) * rng.uniform(0.8, 1.2)
+            dt = (7.6 - 4.2 * tempo) * (1.0 + TEMPO_STYLE * (self.sides[self.poss].tac.directness - 0.5)) * rng.uniform(0.8, 1.2)  # patient play = more, shorter passes
             t += dt
             evs: list[Event] = []
             self._apply_rules(t, evs)
