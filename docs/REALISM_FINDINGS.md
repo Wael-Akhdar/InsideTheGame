@@ -19,25 +19,30 @@ Each real frame is given to the model with only the formation, the ball and who 
 The model is close to what a per-team, in-sample linear fit can do. What is left (individual runs, marking, pressing) needs a model
 that looks at opponents, not only at the ball.
 
-## Known gaps (what real data shows and the simulator does not reproduce)
+## Where the ball goes: real vs simulator (`python -m gamepulse.spatial`, 14 comparisons, 8 within tolerance; was 1 of 14)
 | Quantity | Real | Simulator |
 |---|---|---|
-| passes starting in the own third | 28% | 9% |
-| spread of pass start positions across the pitch (std of y) | 28.8 | 20.1 |
-| passes starting wide (more than 25 from the centre line) | 50% | 28% |
-| forward / backward / lateral passes | 57 / 28 / 15% | 41 / 46 / 14% |
-| share of passes made by defenders / midfielders / forwards | 42 / 40 / 13% | 32 / 30 / 36% |
-| pass accuracy from the own / middle / final third | 84 / 87 / 74% | 81 / 83 / 82% |
+| forward / backward / lateral passes | 48 / 20 / 32% | 45 / 24 / 31% |
+| pass accuracy from the own / middle / final third | 84 / 87 / 74% | 86 / 87 / 75% |
+| mean shot distance, shots from inside the box | 18.6 m, 57% | 19.7 m, 59% |
+| passes starting in the own third | 30% | 26% |
+| passes starting wide (more than 25 from the centre line) | 50% | 40% |
+| spread of pass start positions across the pitch (std of y) | 28.8 | 25.0 |
+| share of passes made by defenders / midfielders / forwards | 44 / 42 / 14% | 34 / 33 / 33% |
 | defenders' median distance behind the ball when their team has it | 8.8 m | 16.9 m |
 | kilometres run by an outfield player in a match | 10.0 | 7.0 (movement inside a tick is not modelled) |
-| real match outcomes vs simulated matches with the same formations (neutral instructions) | | 60 of 112 stats inside the 5-95% band; possession, passes and pass counts are style-driven, so neutral instructions cannot cover them |
-In short: totals and shape are right, but the ball moves in a narrower band than in real matches, forwards handle it too much, and the
-final third is too easy. Coaches should read the Lab as a comparison of tactics under one model, not as a prediction of real results.
+What fixed the biggest gaps: accuracy by (third the pass starts in, third it ends in), taken from real passes (backward and sideways passes
+are safe, passes into the final third are not); a defender who goes to the ball where a failed pass lands (real: 87% of such balls are won in
+the defending team's own third); a stronger shooting propensity inside the box; passes weighted towards the full width of the pitch and towards
+the back line's circulation. The values were tuned with `tools/tune_flow.py` (bounded search with a penalty for leaving the starting point; fixed seeds).
+Still open: forwards make a third of the passes (real: 14%), the ball still travels in a narrower band than in real matches, and a tactic's
+style moves the numbers less than in real football (a possession preset shoots 7 times per match, real possession teams 13).
+Coaches should read the Lab as a comparison of tactics under one model, not as a prediction of real results.
 
 ## What was tried and why it is not on main
 Branch `realism-experiments` holds the work: a data prior built from real passes (where passes go from each zone, shot rate and pass
 accuracy by zone), a per-line positioning model fitted with a shape-fidelity term, and automatic tuning of the passing and shooting
 parameters. It brings direction shares, midfield share, accuracy and pass volume close to real, but it lowers goals to 0.4 per team
 (real 1.2) because shots are taken from slightly worse locations, and it leaves the ball distribution too central. It was parked
-rather than merged. A next step would be to model build-up from the back explicitly (goal kicks, centre-backs, long switches) and to make
+rather than merged (the flow fixes above were rebuilt on `main` from its findings: realistic shot locations kept goals at 1.2). A next step would be to model build-up from the back explicitly (goal kicks, centre-backs, long switches) and to make
 final-third passes harder, then recalibrate shots with the fitted xG model.
