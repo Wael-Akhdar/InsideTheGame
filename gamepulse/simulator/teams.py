@@ -28,6 +28,10 @@ _ROLE_BONUS = {
     "sweeper_keeper": dict(passing=10, keeping=-2),
 }
 
+# How much squad quality moves each attribute (relative weight): set so that a gap in quality changes possession, shots and goals
+# the way a gap in strength does in real leagues (gamepulse/strength.py).
+QUALITY_WEIGHT = {"passing": 1.0, "vision": 1.0, "dribbling": 1.0, "tackling": 1.0, "shooting": 3.0, "keeping": 3.0, "pace": 1.0, "stamina": 1.0}
+
 _TEAM_INFO = {"RVR": ("Riverside FC", "RVR"), "NTH": ("Northgate United", "NTH")}
 
 
@@ -44,7 +48,7 @@ def build_team(tid: str, tactic, seed: int = 0, quality: float = 1.0) -> Team:
             attrs[k] += v
         for k in attrs:
             if attrs[k]:
-                attrs[k] = round(max(30.0, min(95.0, 70 + (attrs[k] - 70) + (quality - 1) * 40 + rng.gauss(0, 3.5))), 1)
+                attrs[k] = round(max(30.0, min(95.0, 70 + (attrs[k] - 70) + (quality - 1) * 40 * QUALITY_WEIGHT.get(k, 1.0) + rng.gauss(0, 3.5))), 1)
         names = _NAMES.get(tid) or [f"Player {n}" for n in range(1, 12)]
         team.players.append(Player(id=f"{tid}{i}", name=names[i % len(names)], team=tid, number=i + 1,
                                    position=line, slot=slot, role=role, attrs=attrs))

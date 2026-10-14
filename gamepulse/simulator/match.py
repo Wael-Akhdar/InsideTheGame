@@ -38,7 +38,7 @@ SHAPE = {"ball_shift_x": 0.3, "ball_shift_y": 0.2, "lh_in": 10.0, "lh_out": 24.0
          "gk_base": 5.0, "gk_ball": 0.08, "ax_scale": 1.0, "off_df": 0.0, "off_mf": 0.0, "off_fw": 0.0}
 
 
-PASS = {"wide": 8.0, "dir_base": 1.875, "lateral": 0.9, "fw_back": 0.586, "back": 0.374, "dist_scale": 0.4, "dist_base": 9.0, "dist_dir": 6.0, "acc_len": 1.0, "rw_gk": 1.0, "rw_df": 1.5,
+PASS = {"wide": 16.0, "dir_base": 1.875, "lateral": 0.9, "fw_back": 0.586, "back": 0.374, "dist_scale": 0.4, "dist_base": 9.0, "dist_dir": 6.0, "acc_len": 1.0, "rw_gk": 1.0, "rw_df": 1.5,
         "rw_mf": 1.0, "rw_fw": 0.25, "own_keep": 7.5, "fin_back": 0.375, "fwd_cap": 100.0}  # receiver weights, see _pass
 LEN_X = [0, 5, 15, 25, 35, 45, 60]
 LEN_ADJ = [0.0, -0.05, 0.05, 0.06, 0.04, -0.03, -0.23]
@@ -50,7 +50,11 @@ def _third(x: float) -> int:
 ACC_TABLE = [[0.02, 0.04, 0.0], [0.08, 0.06, -0.10], [0.12, 0.09, -0.15]]
 
 
-SHOT = {"p": 0.069, "box_near": 3.287}  # shooting propensity: base rate and the factor inside the box up to the six-yard line
+SHOT = {"p": 0.081, "box_near": 3.287}  # shooting propensity: base rate and the factor inside the box up to the six-yard line
+QUALITY = {"pass": 0.004, "def": 0.006}  # per attribute point: passer's technique and the defending side's reading of the game, on pass success
+QUALITY_PER_GAP = 0.15  # squad quality gap per unit of real strength gap (log-goal ratio), see gamepulse/strength.py
+GOALSIDE = {"on": True, "df": 3.0}  # defending: the back line keeps goal-side of the ball
+MOVE = {"in": 0.7, "out": 1.0, "speed": 5.0, "react": 1.0}  # share of the gap to its target a player closes in one tick (attacking / defending)
 TEMPO_STYLE = 0.0  # how much a patient style raises the number of actions per match
 TACKLE = 1.0  # scale of the tackle attempts by the closest defender
 CARRY = 1.0  # scale of the share of actions where the carrier runs with the ball
@@ -63,7 +67,7 @@ def _load_correction():
     return json.loads(f.read_text())["table"] if f.exists() else None
 
 
-WANDER = {"sx": 16.875, "sy": 10.0, "tau": 40.0}  # players drift around their target (runs, drops): sd in pitch units and time constant in seconds
+WANDER = {"sx": 16.875, "sy": 16.0, "tau": 40.0, "out": 1.0}  # players drift around their target (runs, drops): sd in pitch units and time constant in seconds
 CORRECTION = _load_correction()  # how far real lines stand from the uncorrected model, by phase, line and ball depth (tools/build_shape_correction.py)
 
 
@@ -91,6 +95,8 @@ def shape_targets(S, has_ball: bool, bx: float, by: float, params: dict | None =
         near = ~S.gk & (S.base[:, 0] < 68)  # forwards keep their shape: they are the targets of the build-up
         tx = np.where(near, tx + (bx - tx) * support * 0.4, tx)
         ty = np.where(near, ty + (by - ty) * support, ty)
+    if not has_ball and GOALSIDE["on"]:  # defenders stay between the ball and their goal
+        tx = np.where((S.line == "DF") & (tx > bx - GOALSIDE["df"]), np.maximum(3.0, bx - GOALSIDE["df"]), tx)
     if correction and CORRECTION:
         band = min(len(CORRECTION["in"]["DF"]) - 1, int(bx / 100 * len(CORRECTION["in"]["DF"])))
         shift = np.array([CORRECTION["in" if has_ball else "out"][ln][band] if ln != "GK" else 0.0 for ln in S.line])
@@ -123,6 +129,8 @@ class _Side:
         self.fat = 1.0
         self.pressers: list[int] = []
         self.wander = np.zeros((11, 2))
+        out = [p for p, g in zip(team.players, self.gk) if not g]
+        self.def_q = float(np.mean([(p.attrs["tackling"] + p.attrs["pace"]) / 2 for p in out]))  # how well the side reads and closes passing lanes
 
     def attr(self, i: int, name: str) -> float:
         return self.team.players[i].attrs[name] * (0.6 + 0.4 * self.inj[i])  # injured players perform worse
@@ -224,7 +232,7 @@ class MatchSimulator:
 
         rho = math.exp(-dt / WANDER["tau"])
         S.wander = S.wander * rho + self.nprng.normal(0, 1, (11, 2)) * np.array([WANDER["sx"], WANDER["sy"]]) * math.sqrt(1 - rho * rho)
-        tgt = np.where(S.gk[:, None], tgt, np.clip(tgt + S.wander, 3, 97))  # off-ball movement; the carrier and pressers are overridden below
+        tgt = np.where(S.gk[:, None], tgt, np.clip(tgt + S.wander * (1.0 if has_ball else WANDER["out"]), 3, 97))  # off-ball movement; the carrier and pressers are overridden below
         if has_ball:
             tgt[self.c] = (min(97.0, S.pos[self.c, 0] + 2.5), S.pos[self.c, 1])
         for i in S.pressers:
@@ -232,8 +240,8 @@ class MatchSimulator:
 
         vec = tgt - S.pos
         dist = np.hypot(vec[:, 0], vec[:, 1]) + 1e-9
-        max_step = 5.0 * (S.pace * S.inj / 75.0) * S.fat * dt
-        frac = np.minimum(1.0, max_step / dist) * np.where(full, 1.0, 0.7)
+        max_step = MOVE["speed"] * (S.pace * S.inj / 75.0) * S.fat * dt
+        frac = np.minimum(1.0, max_step / dist) * np.where(full, 1.0, MOVE["in"] if has_ball else MOVE["out"])
         step = vec * frac[:, None] + self.nprng.normal(0, 0.25, (11, 2))
         step[~S.active] = 0
         S.pos = np.clip(S.pos + step, 1.0, 99.0)
@@ -379,7 +387,7 @@ class MatchSimulator:
                 cands, weights = [k for k, _ in longs], [w for _, w in longs]
         i, fwd, dm, open_r = rng.choices(cands, weights=[w ** 0.65 for w in weights])[0]  # flatter: passing is spread over the whole team
         p = (1.19 - 0.10 * (P.tac.tempo - 0.5) - 0.0066 * dm * (1.2 - P.attr(c, "vision") / 150) - 0.11 * min(pressure * (0.6 + 0.8 * D.tac.pressing), 2.0)
-             - 0.17 * (1 - open_r / 14) + (P.attr(c, "passing") - 70) / 250
+             - 0.17 * (1 - open_r / 14) + (P.attr(c, "passing") - 70) * QUALITY["pass"] - (D.def_q - 70) * QUALITY["def"]
              - 0.15 * max(0.0, fwd) / 40 * (1 - max(0.0, role["sf"])) + 0.04 * self._numeric(P, D))
         p += PASS["acc_len"] * float(np.interp(dm, LEN_X, LEN_ADJ))  # real accuracy by pass length: safest at 10-30 m, long balls often lost
         p += ACC_TABLE[_third(float(me[0]))][_third(float(P.pos[i, 0]))]  # real accuracy by (third the pass starts in, third it ends in)
@@ -576,6 +584,9 @@ class MatchSimulator:
             evs: list[Event] = []
             self._apply_rules(t, evs)
             self._step(t, dt, evs)
+            if MOVE["react"] > 0:  # while the ball travels, the defending side already runs back towards its new shape
+                d = self.sides[self._other(self.poss)]
+                self._move(d, False, dt * MOVE["react"])
             yield Tick(t, self._frame(t), evs)
         yield Tick(t, self._frame(t), [self._ev(t, "fulltime", self.poss)])
 
