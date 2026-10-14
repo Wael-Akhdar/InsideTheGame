@@ -19,24 +19,27 @@ Each real frame is given to the model with only the formation, the ball and who 
 The model is close to what a per-team, in-sample linear fit can do. What is left (individual runs, marking, pressing) needs a model
 that looks at opponents, not only at the ball.
 
-## Where the ball goes: real vs simulator (`python -m gamepulse.spatial`, 14 comparisons, 8 within tolerance; was 1 of 14)
+## Where the ball goes: real vs simulator (`python -m gamepulse.spatial`, 14 comparisons, 9 within tolerance; was 1 of 14 at the start)
 | Quantity | Real | Simulator |
 |---|---|---|
-| forward / backward / lateral passes | 48 / 20 / 32% | 45 / 24 / 31% |
-| pass accuracy from the own / middle / final third | 84 / 87 / 74% | 86 / 87 / 75% |
-| mean shot distance, shots from inside the box | 18.6 m, 57% | 19.7 m, 59% |
-| passes starting in the own third | 30% | 26% |
-| passes starting wide (more than 25 from the centre line) | 50% | 40% |
-| spread of pass start positions across the pitch (std of y) | 28.8 | 25.0 |
-| share of passes made by defenders / midfielders / forwards | 44 / 42 / 14% | 34 / 33 / 33% |
+| forward / backward / lateral passes | 48 / 20 / 32% | 48 / 22 / 30% |
+| pass accuracy from the own / middle / final third | 84 / 87 / 74% | 86 / 86 / 77% |
+| mean shot distance, shots from inside the box | 18.6 m, 57% | 18.8 m, 63% |
+| passes starting in the own third | 30% | 27% |
+| passes starting wide (more than 25 from the centre line) | 50% | 44% |
+| spread of pass start positions across the pitch (std of y) | 28.8 | 26.6 |
+| share of passes made by defenders / midfielders / forwards | 44 / 42 / 14% | 41 / 34 / 25% |
 | defenders' median distance behind the ball when their team has it | 8.8 m | 16.9 m |
 | kilometres run by an outfield player in a match | 10.0 | 7.0 (movement inside a tick is not modelled) |
 What fixed the biggest gaps: accuracy by (third the pass starts in, third it ends in), taken from real passes (backward and sideways passes
 are safe, passes into the final third are not); a defender who goes to the ball where a failed pass lands (real: 87% of such balls are won in
 the defending team's own third); a stronger shooting propensity inside the box; passes weighted towards the full width of the pitch and towards
 the back line's circulation. The values were tuned with `tools/tune_flow.py` (bounded search with a penalty for leaving the starting point; fixed seeds).
-Still open: forwards make a third of the passes (real: 14%), the ball still travels in a narrower band than in real matches, and a tactic's
-style moves the numbers less than in real football (a possession preset shoots 7 times per match, real possession teams 13).
+Forwards were the largest gap (a third of the passes); two changes from real tracking cut it to a quarter: a per-line position correction
+(`tools/build_shape_correction.py`: in real matches the forwards stand about 10 m behind the ball in the final third and the midfielders 20 m, not on it;
+leave-matches-out placement error 13.57 -> 13.10 m) and off-ball drift of every player (real players spread about 14 m around the model's target, which
+gives the carrier options ahead of and behind the ball). Still open: forwards still make 25% of the passes (real: 14%), the ball still travels in a narrower band than in real matches, and a tactic's
+style moves the numbers less than in real football (a possession preset shoots 9 times per match, real possession teams 13).
 Coaches should read the Lab as a comparison of tactics under one model, not as a prediction of real results.
 
 ## What was tried and why it is not on main
