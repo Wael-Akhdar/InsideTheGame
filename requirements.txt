@@ -1,4 +1,10 @@
 fastapi>=0.110
 uvicorn>=0.29
 openai>=1.40   # Azure OpenAI / Microsoft Foundry deployments
+agent-framework-core>=1.22   # Microsoft Agent Framework
+agent-framework-openai>=1.17
+agent-framework-foundry>=1.15
+mcp>=2.3
+numpy
+scipy
 pytest>=8

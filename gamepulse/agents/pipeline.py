@@ -2,8 +2,9 @@
 
    Event -> StatsAgent -> MomentAgent -> ExplainerAgent -> NarratorAgent -> PersonaAgent -> Overlay
 
-TODO(team): swap the plain-Python orchestrator for Microsoft Agent Framework (same agent roles),
-and register the engine as MCP tools for the Foundry-hosted agents.
+The question-answering agents (match analyst, tactics coach, fact-checker) run on Microsoft Agent Framework in `team.py`;
+the engine is exposed as MCP tools by `gamepulse/mcp_server.py`. A narrator sentence that contains a number absent from its
+facts is rejected by the same fact-checker and replaced by the template.
 """
 from __future__ import annotations
 
@@ -147,6 +148,10 @@ class NarratorAgent(Agent):
         system = (f"You are a Premier League studio commentator. Write 1-2 punchy sentences in {LANGS[v.lang]} "
                   f"for a {MODES[v.mode]}. Use ONLY the given facts, do not invent numbers.")
         body = self.llm.complete(system, facts)
+        if body is not None:
+            from .team import fact_check  # every number the model writes must be in the facts it was given
+            if not fact_check(body, [("facts", facts)], "")["grounded"]:
+                body = None
         if body is None:
             body = why if v.mode == "analyst" else (plain or why.split(" (")[0].split(" - ")[0].rstrip(".") + ".")
         return headline, body
