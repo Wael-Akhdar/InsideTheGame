@@ -1,7 +1,8 @@
 """Chat clients for the agents (Microsoft Agent Framework).
 
 - Azure OpenAI / Microsoft Foundry model deployment when `AZURE_OPENAI_ENDPOINT` + `AZURE_OPENAI_API_KEY` are set
-  (deployment name in `AZURE_OPENAI_DEPLOYMENT`), or a Foundry project when `FOUNDRY_PROJECT_ENDPOINT` is set (Azure CLI login).
+  (deployment name in `AZURE_OPENAI_DEPLOYMENT`), or a Foundry project when `FOUNDRY_PROJECT_ENDPOINT` is set (Azure CLI login),
+  or GitHub Models when `GITHUB_MODELS_TOKEN` is set (model in `GITHUB_MODEL`, default openai/gpt-4.1-mini).
 - Otherwise an offline client: the same agents, tools and function-calling loop, but the "model" is a small deterministic planner.
   The demo and the tests never depend on a network or a key, and every number still comes from a tool call.
 """
@@ -47,11 +48,16 @@ class OfflineChatClient(FunctionInvocationLayer, BaseChatClient):
         return response
 
 
+GITHUB_MODELS_URL = "https://models.github.ai/inference"
+
+
 def backend() -> str:
     if os.getenv("AZURE_OPENAI_ENDPOINT") and os.getenv("AZURE_OPENAI_API_KEY"):
         return "azure-openai"
     if os.getenv("FOUNDRY_PROJECT_ENDPOINT"):
         return "foundry"
+    if os.getenv("GITHUB_MODELS_TOKEN"):
+        return "github-models"
     return "offline"
 
 
@@ -70,6 +76,11 @@ def make_client(planner: Planner, writer: Writer):
 
         return FoundryChatClient(project_endpoint=os.environ["FOUNDRY_PROJECT_ENDPOINT"], model=os.getenv("FOUNDRY_MODEL", "gpt-5.4-mini"),
                                  credential=AzureCliCredential())
+    if kind == "github-models":  # GitHub Models: the same OpenAI models served from Azure, free tier with a GitHub token
+        from agent_framework.openai import OpenAIChatCompletionClient
+
+        return OpenAIChatCompletionClient(model=os.getenv("GITHUB_MODEL", "openai/gpt-4.1-mini"), api_key=os.environ["GITHUB_MODELS_TOKEN"],
+                                          base_url=GITHUB_MODELS_URL)
     return OfflineChatClient(planner, writer)
 
 
