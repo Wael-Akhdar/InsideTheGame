@@ -54,6 +54,11 @@
   .chips { display:flex; gap:6px; flex-wrap:wrap; align-items:center; } .chip { background:var(--panel2); border:1px solid #4d2a6e; border-radius:14px; padding:3px 10px; font-size:12px; }
   .slot input[type=text] { width:100%; font-size:12px; } .slot small { color:var(--mute); font-size:11px; line-height:1.3; } .slot .ai { display:flex; gap:4px; } .slot .ai button { padding:3px 8px; font-size:11px; }
   .slot.cu { outline:1px solid var(--accent); }
+  /* agents */
+  .ask .row { display:flex; gap:8px; flex-wrap:wrap; }
+  .ans { margin-top:10px; background:var(--panel2); border-radius:8px; padding:10px 12px; font-size:14px; line-height:1.45; }
+  .trace { display:flex; flex-wrap:wrap; gap:6px; margin-top:8px; font-size:11px; color:var(--mute); align-items:center; }
+  .trace code { background:var(--bg); border:1px solid var(--line); border-radius:10px; padding:2px 8px; color:var(--text); }
   /* realism */
   .rg { display:grid; grid-template-columns:repeat(auto-fit,minmax(420px,1fr)); gap:16px; padding:16px 24px; }
   @media (max-width:520px) { .rg { grid-template-columns:1fr; padding:16px; } }
@@ -123,6 +128,9 @@
         <div id="lcOut" class="chips" style="margin-top:8px"></div>
       </div>
       <div class="card" style="margin-top:12px"><h3>Live insights <b id="ovn"></b></h3><div id="overlays"></div></div>
+      <div class="card ask" style="margin-top:12px"><h3>Ask the match analyst <b>AI agents · tools · fact-checked</b></h3>
+        <div class="row"><input type="text" id="aQ" style="flex:1;min-width:240px" placeholder="Who is on top? What were the key moments? How is Okoye playing?"><button class="ghost" id="aBtn">Ask</button></div>
+        <div id="aOut"></div></div>
     </div>
     <div class="charts">
       <div class="card chart"><h3>Possession <b id="cPoss"></b></h3><canvas id="chPoss"></canvas></div>
@@ -190,7 +198,10 @@
       <button class="primary" id="lRun" style="width:100%;margin-top:14px">Run simulations</button>
       <p style="color:var(--mute);font-size:12px">Each opponent is played n times (half at home, half away) with different seeds.</p>
     </div>
-    <div id="lOut"><div class="card" style="color:var(--mute)">Pick your tactic, choose the opponents it must survive, and run the Lab. You get win/draw/loss rates per opponent, the expected goals balance and a plain-language diagnosis of what breaks.</div></div>
+    <div><div class="card ask" style="margin-bottom:12px"><h3>Ask the tactics coach <b>AI agents · simulations · fact-checked</b></h3>
+        <div class="row"><input type="text" id="cQ" style="flex:1;min-width:240px" placeholder="How does my tactic do against a Low block 5-3-2 of a title team? What if we get a red card at 30?"><button class="ghost" id="cBtn">Ask</button></div>
+        <div id="cOut"></div></div>
+    <div id="lOut"><div class="card" style="color:var(--mute)">Pick your tactic, choose the opponents it must survive, and run the Lab. You get win/draw/loss rates per opponent, the expected goals balance and a plain-language diagnosis of what breaks.</div></div></div>
   </div>
 </section>
 
@@ -677,6 +688,25 @@ function drawStrength() {
   });
 }
 
+
+/* ---------------------------------------------------------------- agents */
+async function askAgents(input, out, extra) {
+  const q = $(input).value.trim(); if (!q) return;
+  $(out).innerHTML = `<div class="ans" style="color:var(--mute)">Thinking: routing the question, calling the tools…</div>`;
+  try {
+    const r = await post("/api/ask", { question: q, lang: $("mLang").value, ...extra() });
+    const chips = r.tools.map(t => `<code>${t.tool}(${Object.entries(t.args).filter(([k, v]) => v !== null && k !== "scenario").map(([k, v]) => `${k}=${Array.isArray(v) ? v.join("+") : v}`).join(", ")})</code>`).join("");
+    const check = r.grounded ? '<span class="okb">every number traced to a tool result</span>'
+                             : `<span class="offb">unverified numbers: ${r.unsupported.join(", ")}</span>`;
+    $(out).innerHTML = `<div class="ans">${r.answer.replace(/</g, "&lt;")}</div>
+      <div class="trace"><b>${r.agent.replace("_", " ")}</b> → ${chips || "no tool"} ${check} <span>model: ${r.backend}</span></div>`;
+  } catch (e) { $(out).innerHTML = `<div class="ans">Error: ${e}</div>`; }
+}
+$("aBtn").onclick = () => askAgents("aQ", "aOut", () => ({ sid: curSid }));
+$("aQ").onkeydown = e => { if (e.key === "Enter") $("aBtn").click(); };
+$("cBtn").onclick = () => askAgents("cQ", "cOut", () => ({ tactic: selVal($("lTactic")), level: $("lLvl").value, opponent_level: $("lOppLvl").value }));
+$("cQ").onkeydown = e => { if (e.key === "Enter") $("cBtn").click(); };
+
 /* ---------------------------------------------------------------- boot */
 fetch("/api/catalog").then(r => r.json()).then(c => {
   catalog = c; refreshSelectors();
@@ -689,6 +719,8 @@ fetch("/api/catalog").then(r => r.json()).then(c => {
   if (location.hash === "#lab") { document.querySelector("[data-tab=lab]").click(); $("lRun").click(); }
   if (location.hash === "#tracking") { $("mSource").value = "sportec"; $("mSource").onchange(); $("mSpeed").value = "150"; $("go").click(); }
   if (location.hash === "#real") { $("mSource").value = "Italy"; $("mSource").onchange(); $("mSeed").value = "40"; $("mSpeed").value = "400"; $("go").click(); }
+  if (location.hash === "#coach") { document.querySelector("[data-tab=lab]").click(); $("cQ").value = "How does my tactic do against a Low block 5-3-2 of a title contender?"; $("cBtn").click(); }
+  if (location.hash === "#analyst") { $("mSpeed").value = "1000"; $("go").click(); setTimeout(() => { $("aQ").value = "Who is on top, and what were the key moments?"; $("aBtn").click(); }, 5000); }
   if (location.hash === "#realism") document.querySelector("[data-tab=real]").click();
   if (location.hash === "#demo") { $("mSpeed").value = "150"; $("go").click(); }
 });

@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import json
 from pathlib import Path
 from typing import Any, Optional
@@ -12,6 +13,9 @@ from fastapi.responses import FileResponse, StreamingResponse
 
 from ..agents.interpreter import interpret_role, interpret_scenario
 from ..agents.pipeline import Orchestrator, Viewer
+from ..agents.team import ask as ask_agents
+from ..agents.tools import MatchContext
+from ..mcp_server import mcp as mcp_server
 from ..overlay import build_feed, export_overlay
 from ..strength import LEVELS, quality_for
 from ..lab import evaluate, what_if
@@ -25,7 +29,17 @@ from ..tactics import PRESETS, describe_catalog, get_formation, resolve_tactic
 
 SESSIONS: dict[str, dict[str, Any]] = {}  # live match sessions: speed / pause / queued coach commands
 
-app = FastAPI(title="GamePulse")
+_mcp_app = mcp_server.streamable_http_app(streamable_http_path="/", stateless_http=True, host="0.0.0.0")  # MCP endpoint at /mcp/ (same tools as `python -m gamepulse.mcp_server`)
+
+
+@contextlib.asynccontextmanager
+async def _lifespan(_app):
+    async with mcp_server.session_manager.run():
+        yield
+
+
+app = FastAPI(title="GamePulse", lifespan=_lifespan)
+app.mount("/mcp", _mcp_app)
 WEB = Path(__file__).resolve().parents[2] / "web"
 
 
@@ -127,6 +141,7 @@ async def stream(seed: int = 42, speed: float = 60.0, mode: str = "casual", lang
     if sid:
         SESSIONS[sid] = sess
     orch = Orchestrator(*feed.teams)
+    sess["ctx"] = MatchContext(orch.state, *feed.teams)  # what the match analyst agent can see while this match runs
     viewer = Viewer(mode=mode if mode in ("casual", "analyst") else "casual", lang=lang if lang in ("en", "fr", "es", "ar") else "en",
                     favorite_team=team, focus_player=player)
 
@@ -162,7 +177,9 @@ async def stream(seed: int = 42, speed: float = 60.0, mode: str = "casual", lang
                         sim.add_scenario(cmd["scenario"])
             yield "event: end\ndata: {}\n\n"
         finally:
-            SESSIONS.pop(sid or "", None)
+            sess["ended"] = True  # keep the match state so the analyst agent can still answer about it
+            while len(SESSIONS) > 50:
+                SESSIONS.pop(next(iter(SESSIONS)))
 
     return StreamingResponse(gen(), media_type="text/event-stream")
 
@@ -186,7 +203,7 @@ async def overlay(source: str = "sim", seed: int = 42, league: str = "Spain", la
 async def match_control(body: dict = Body(...)):
     """Live coaching: change speed, pause/resume, switch tactics or inject a scenario while the match is running."""
     sess = SESSIONS.get(str(body.get("sid", "")))
-    if sess is None:
+    if sess is None or sess.get("ended"):
         raise HTTPException(404, "No running match for this session")
     reply: dict[str, Any] = {"ok": True}
     if "speed" in body:
@@ -202,6 +219,19 @@ async def match_control(body: dict = Body(...)):
         sess["queue"].append({"type": "scenario", "scenario": scn})
         reply["scenario"] = scn
     return reply
+
+
+@app.post("/api/ask")
+async def ask(body: dict = Body(...)):
+    """Ask the agents: {"question", "sid" (a running match, optional), "tactic", "level", "opponent_level", "lang"}.
+    Returns the answer, which agent answered, the tools it called and the fact-check of every number."""
+    question = str(body.get("question", "")).strip()
+    if not question:
+        raise HTTPException(400, "question is required")
+    sess = SESSIONS.get(str(body.get("sid", "")))
+    hints = {k: body[k] for k in ("tactic", "level", "opponent_level") if body.get(k)}
+    lang = body.get("lang") if body.get("lang") in ("en", "fr", "es", "ar") else "en"
+    return await ask_agents(question, sess.get("ctx") if sess else None, hints, lang)
 
 
 @app.post("/api/lab/whatif")
