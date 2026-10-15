@@ -12,8 +12,8 @@ class LLM:
     def __init__(self):
         self.endpoint = os.getenv("AZURE_OPENAI_ENDPOINT")
         self.key = os.getenv("AZURE_OPENAI_API_KEY")
-        self.deployment = os.getenv("AZURE_OPENAI_DEPLOYMENT", "gpt-4o-mini")
-        self.version = os.getenv("AZURE_OPENAI_API_VERSION", "2024-10-21")
+        self.deployment = os.getenv("AZURE_OPENAI_DEPLOYMENT", "gpt-5.4-mini")
+        self.version = os.getenv("AZURE_OPENAI_API_VERSION", "2025-04-01-preview")
         self._client = None
 
     @property
@@ -30,8 +30,9 @@ class LLM:
         if not self.enabled:
             return None
         try:
+            # reasoning models (gpt-5 family) take max_completion_tokens and no temperature; the budget covers their reasoning too
             r = self._get().chat.completions.create(
-                model=self.deployment, max_tokens=max_tokens, temperature=0.7,
+                model=self.deployment, max_completion_tokens=max_tokens * 6,
                 messages=[{"role": "system", "content": system}, {"role": "user", "content": user}],
             )
             return r.choices[0].message.content.strip()

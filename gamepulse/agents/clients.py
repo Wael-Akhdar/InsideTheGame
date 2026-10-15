@@ -61,14 +61,14 @@ def make_client(planner: Planner, writer: Writer):
     if kind == "azure-openai":
         from agent_framework.openai import OpenAIChatCompletionClient
 
-        return OpenAIChatCompletionClient(model=os.getenv("AZURE_OPENAI_DEPLOYMENT", "gpt-4o-mini"), api_key=os.environ["AZURE_OPENAI_API_KEY"],
+        return OpenAIChatCompletionClient(model=os.getenv("AZURE_OPENAI_DEPLOYMENT", "gpt-5.4-mini"), api_key=os.environ["AZURE_OPENAI_API_KEY"],
                                           azure_endpoint=os.environ["AZURE_OPENAI_ENDPOINT"],
-                                          api_version=os.getenv("AZURE_OPENAI_API_VERSION", "2024-10-21"))
+                                          api_version=os.getenv("AZURE_OPENAI_API_VERSION", "2025-04-01-preview"))
     if kind == "foundry":
         from agent_framework.foundry import FoundryChatClient
         from azure.identity import AzureCliCredential
 
-        return FoundryChatClient(project_endpoint=os.environ["FOUNDRY_PROJECT_ENDPOINT"], model=os.getenv("FOUNDRY_MODEL", "gpt-4o-mini"),
+        return FoundryChatClient(project_endpoint=os.environ["FOUNDRY_PROJECT_ENDPOINT"], model=os.getenv("FOUNDRY_MODEL", "gpt-5.4-mini"),
                                  credential=AzureCliCredential())
     return OfflineChatClient(planner, writer)
 
