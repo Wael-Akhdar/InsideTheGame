@@ -5,6 +5,7 @@ agent-framework-core>=1.22   # Microsoft Agent Framework
 agent-framework-openai>=1.17
 agent-framework-foundry>=1.15
 mcp>=2.3
+python-dotenv
 numpy
 scipy
 pytest>=8
