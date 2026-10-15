@@ -16,22 +16,14 @@ class LLM:
         self.version = os.getenv("AZURE_OPENAI_API_VERSION", "2025-04-01-preview")
         self._client = None
 
-        self.github_token = os.getenv("GITHUB_MODELS_TOKEN")
-        if not (self.endpoint and self.key) and self.github_token:
-            self.deployment = os.getenv("GITHUB_MODEL", "openai/gpt-4.1-mini")
-
     @property
     def enabled(self) -> bool:
-        return bool(self.endpoint and self.key) or bool(self.github_token)
+        return bool(self.endpoint and self.key)
 
     def _get(self):
-        if self._client is None:  # lazy import: optional dependency at runtime
-            if self.endpoint and self.key:
-                from openai import AzureOpenAI
-                self._client = AzureOpenAI(azure_endpoint=self.endpoint, api_key=self.key, api_version=self.version)
-            else:  # GitHub Models (OpenAI-compatible endpoint)
-                from openai import OpenAI
-                self._client = OpenAI(base_url="https://models.github.ai/inference", api_key=self.github_token)
+        if self._client is None:
+            from openai import AzureOpenAI  # lazy import: optional dependency at runtime
+            self._client = AzureOpenAI(azure_endpoint=self.endpoint, api_key=self.key, api_version=self.version)
         return self._client
 
     def complete(self, system: str, user: str, max_tokens: int = 220) -> Optional[str]:
