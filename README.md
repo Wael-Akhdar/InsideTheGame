@@ -45,6 +45,15 @@ See `docs/ROADMAP.md` for the vision, ideas (replaying real matches, scouting, s
                pass difficulty)  swings, cards)      matters)      tone)        player)      readable)
 ```
 
+## Agents and MCP
+
+Microsoft Agent Framework agents answer questions with the engine as tools, and every number they write is fact-checked against
+the tool results. The same tools are served over MCP (`python -m gamepulse.mcp_server`, or `/mcp/` on the API). See `docs/AGENTS.md`.
+
+```
+ question -> Router -> Match Analyst (live match tools) | Tactics Coach (simulation tools) -> Fact-checker -> answer + tool trace
+```
+
 ## Quick start
 
 ```bash
@@ -71,6 +80,8 @@ With `AZURE_OPENAI_*` set, narration and translation go through your Foundry dep
 | `gamepulse/engine/state.py` | Live stats, momentum, control-vs-chaos, key-moment detection |
 | `gamepulse/agents/pipeline.py` | Agents (Explainer, Narrator, Persona) and the orchestrator |
 | `gamepulse/agents/llm.py` | Azure OpenAI client with offline fallback |
+| `gamepulse/agents/tools.py`, `team.py`, `clients.py` | Agent Framework tools, Match Analyst / Tactics Coach / Router / Fact-checker, model clients |
+| `gamepulse/mcp_server.py` | MCP server exposing the engine, the Lab and the agents |
 | `gamepulse/api/server.py` | FastAPI + Server-Sent Events stream |
 | `gamepulse/overlay.py` | Timestamped overlay JSON export, see docs/OVERLAY.md |
 | `web/index.html` | Live dashboard (overlay cards, momentum bar, stats) |
