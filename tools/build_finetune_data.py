@@ -317,7 +317,8 @@ async def _agent_example(TM, kind, planner, tools, question, lang, tactic=None):
     calls, results = [], []
     for i, (name, args) in enumerate(plan):
         res = by_name[name].func(**args)
-        calls.append({"id": f"call_{i + 1}", "type": "function", "function": {"name": name, "arguments": json.dumps(args)}})
+        sent = {k: v for k, v in args.items() if v is not None}  # arguments must match the schema: no nulls
+        calls.append({"id": f"call_{i + 1}", "type": "function", "function": {"name": name, "arguments": json.dumps(sent)}})
         results.append((name, res))
     if lang == "en":
         answer = (TM.analyst_writer if kind == "analyst" else TM.coach_writer)(question, results)
@@ -345,7 +346,7 @@ def _plain_schema(spec: dict) -> dict:
                 if "description" in x:
                     base["description"] = x["description"]
                 return base
-            return {k: clean(v) for k, v in x.items() if k != "title" and not (k == "default" and v is None)}
+            return {k: clean(v) for k, v in x.items() if k not in ("title", "default")}
         if isinstance(x, list):
             return [clean(v) for v in x]
         return x
