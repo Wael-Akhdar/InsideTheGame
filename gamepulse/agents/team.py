@@ -236,7 +236,17 @@ async def ask(question: str, ctx: Optional[MatchContext] = None, hints: Optional
     question = (question or "").strip()[:500]
     kind = route(question, ctx)
     agent = build_agent(kind, ctx, hints, lang)
-    resp = await agent.run(question)
+    used = backend()
+    try:
+        resp = await agent.run(question)
+    except Exception as exc:  # model unavailable (expired Developer deployment, quota, network): same agent, offline planner
+        print(f"[agents] {used} failed ({type(exc).__name__}: {str(exc)[:120]}), answering offline")
+        from .clients import OfflineChatClient
+        planner, writer = (analyst_planner(ctx), analyst_writer) if kind == "analyst" else (coach_planner(hints or {}), coach_writer)
+        agent = Agent(OfflineChatClient(planner, writer), ANALYST_INSTRUCTIONS if kind == "analyst" else COACH_INSTRUCTIONS,
+                      name=agent.name, tools=make_match_tools(ctx) if kind == "analyst" else make_lab_tools())
+        resp = await agent.run(question)
+        used = "offline (model unavailable)"
     calls, results = {}, []
     trace = []
     for m in resp.messages:
@@ -249,4 +259,4 @@ async def ask(question: str, ctx: Optional[MatchContext] = None, hints: Optional
                 results.append((calls.get(c.call_id, "?"), c.result))
     answer = resp.text or ""
     check = fact_check(answer, results, question)
-    return {"agent": agent.name, "backend": backend(), "answer": answer, "tools": trace, **check}
+    return {"agent": agent.name, "backend": used, "answer": answer, "tools": trace, **check}
