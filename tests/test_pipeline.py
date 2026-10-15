@@ -84,7 +84,7 @@ def test_scenario_rules_fire_and_are_sanitized():
                               {"trigger": {"minute": 30}, "action": {"type": "nuke", "team": "home"}}]})
     assert len(scn["rules"]) == 1  # unknown action dropped
     sim = MatchSimulator(seed=4, scenario=scn, record_frames=False)
-    cards = [e for e in sim.events() if e.type == "card"]
+    cards = [e for e in sim.events() if e.type == "card" and e.meta.get("scripted")]  # natural red cards can happen earlier
     assert cards and cards[0].team == "RVR" and cards[0].minute >= 20
 
 
