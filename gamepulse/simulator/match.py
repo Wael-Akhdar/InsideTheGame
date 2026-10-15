@@ -39,7 +39,7 @@ SHAPE = {"ball_shift_x": 0.3, "ball_shift_y": 0.2, "lh_in": 10.0, "lh_out": 24.0
 
 
 PASS = {"wide": 16.0, "dir_base": 1.875, "lateral": 0.9, "fw_back": 0.586, "back": 0.374, "dist_scale": 0.4, "dist_base": 9.0, "dist_dir": 6.0, "acc_len": 1.0, "rw_gk": 1.0, "rw_df": 1.5,
-        "rw_mf": 1.0, "rw_fw": 0.25, "own_keep": 7.5, "fin_back": 0.375, "fwd_cap": 100.0}  # receiver weights, see _pass
+        "rw_mf": 1.0, "rw_fw": 0.12, "own_keep": 7.5, "fin_back": 0.375, "fwd_cap": 100.0}  # receiver weights, see _pass
 LEN_X = [0, 5, 15, 25, 35, 45, 60]
 LEN_ADJ = [0.0, -0.05, 0.05, 0.06, 0.04, -0.03, -0.23]
 def _third(x: float) -> int:
@@ -50,7 +50,7 @@ def _third(x: float) -> int:
 ACC_TABLE = [[0.02, 0.04, 0.0], [0.08, 0.06, -0.10], [0.12, 0.09, -0.15]]
 
 
-SHOT = {"p": 0.081, "box_near": 3.287}  # shooting propensity: base rate and the factor inside the box up to the six-yard line
+SHOT = {"p": 0.084, "box_near": 3.287, "finish": 1.22}  # shooting propensity: base rate and the factor inside the box up to the six-yard line
 QUALITY = {"pass": 0.004, "def": 0.006}  # per attribute point: passer's technique and the defending side's reading of the game, on pass success
 QUALITY_PER_GAP = 0.15  # squad quality gap per unit of real strength gap (log-goal ratio), see gamepulse/strength.py
 GOALSIDE = {"on": True, "df": 3.0}  # defending: the back line keeps goal-side of the ball
@@ -443,7 +443,7 @@ class MatchSimulator:
         finishing = P.attr(c, "shooting") / 70
         keeper = D.attr(0, "keeping") / 75
         roll = rng.random()
-        if roll < xg * finishing / keeper * 1.12:
+        if roll < xg * finishing / keeper * SHOT["finish"]:
             outcome = "goal"
         else:
             r2 = rng.random()
