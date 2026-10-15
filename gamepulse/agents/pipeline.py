@@ -133,6 +133,17 @@ class NarratorAgent(Agent):
     """Turns a moment + explanation into broadcast-ready copy in the viewer's language and mode."""
     name = "narrator"
 
+    def prompt(self, m: Moment, why: str, v: Viewer, state: MatchState) -> tuple[str, str]:
+        """System and user messages sent to the model (the fine-tuning data is built with the same function)."""
+        player, team = self.pname(m.player), self.tname(m.team)
+        facts = f"{m.kind} at minute {m.minute} by {player} ({team}). {why}"
+        if m.player and v.mode == "analyst":
+            ps = {k: (round(x, 2) if isinstance(x, float) else x) for k, x in state.player_summary(m.player).items() if k != "pass_difficulty_sum"}
+            facts += f" Player stats: {ps}"
+        system = (f"You are a Premier League studio commentator. Write 1-2 punchy sentences in {LANGS[v.lang]} "
+                  f"for a {MODES[v.mode]}. Use ONLY the given facts, do not invent numbers.")
+        return system, facts
+
     def run(self, m: Moment, why: str, v: Viewer, state: MatchState, plain: Optional[str] = None) -> tuple[str, str]:
         player, team = self.pname(m.player), self.tname(m.team)
         headline = {
@@ -142,11 +153,7 @@ class NarratorAgent(Agent):
             "unlucky": f"{team}: dominant, not rewarded", "pressing_fade": f"{team}'s pressing is fading",
             "key_player": f"{player} runs {team}'s game", "turning_point": f"Turning point for {team}",
         }.get(m.kind, "Key moment")
-        facts = f"{m.kind} at minute {m.minute} by {player} ({team}). {why}"
-        if m.player and v.mode == "analyst":
-            facts += f" Player stats: {state.player_summary(m.player)}"
-        system = (f"You are a Premier League studio commentator. Write 1-2 punchy sentences in {LANGS[v.lang]} "
-                  f"for a {MODES[v.mode]}. Use ONLY the given facts, do not invent numbers.")
+        system, facts = self.prompt(m, why, v, state)
         body = self.llm.complete(system, facts)
         if body is not None:
             from .team import fact_check  # every number the model writes must be in the facts it was given
