@@ -1,57 +1,57 @@
 {
- "generated": "2026-10-14",
+ "generated": "2026-10-15",
  "sources": [
   "Wyscout public soccer match event dataset, CC BY 4.0. Pappalardo et al. (2019), Scientific Data 6:236. 1,446 league matches (France, Germany, Italy, Spain 2017/18).",
   "Sportec Open DFL dataset, CC BY 4.0, with the authorization of the DFL. Bassek, Rein, Weber, Memmert (2025). 7 Bundesliga matches with full tracking.",
-  "Bradley et al. (2011), The effect of playing formation on high-intensity running and technical profiles in English FA Premier League soccer matches, Journal of Sports Sciences 29(8)."
+  "Formations read from the starting line-ups (number of defenders, midfielders and forwards as filed by Wyscout), effect measured once the strength gap is accounted for."
  ],
  "totals": [
   {
    "label": "Passes per team",
    "real": 427.63,
-   "sim": 401.5,
+   "sim": 401.6,
    "ok": true
   },
   {
    "label": "Pass accuracy %",
    "real": 82.9,
-   "sim": 82.4,
+   "sim": 83.13,
    "ok": true
   },
   {
    "label": "Mean pass length (m)",
    "real": 20.27,
-   "sim": 19.93,
+   "sim": 19.64,
    "ok": true
   },
   {
    "label": "Forward passes %",
    "real": 47.95,
-   "sim": 48.49,
+   "sim": 46.67,
    "ok": true
   },
   {
    "label": "Shots per team",
    "real": 11.07,
-   "sim": 11.29,
+   "sim": 11.07,
    "ok": true
   },
   {
    "label": "Goals per team",
    "real": 1.16,
-   "sim": 1.25,
+   "sim": 1.23,
    "ok": true
   },
   {
    "label": "Shot conversion %",
    "real": 10.49,
-   "sim": 11.03,
+   "sim": 11.06,
    "ok": true
   },
   {
    "label": "Fouls per team",
    "real": 13.77,
-   "sim": 13.77,
+   "sim": 13.56,
    "ok": true
   }
  ],
@@ -59,85 +59,97 @@
   {
    "label": "passes starting in own third %",
    "real": 29.8,
-   "sim": 27.4,
+   "sim": 27.0,
    "ok": true
+  },
+  {
+   "label": "passes starting in final third %",
+   "real": 22.2,
+   "sim": 32.4,
+   "ok": false
+  },
+  {
+   "label": "passes starting in the last 20 units %",
+   "real": 6.9,
+   "sim": 15.9,
+   "ok": false
   },
   {
    "label": "spread of pass start y (std)",
    "real": 28.8,
-   "sim": 28.4,
+   "sim": 28.3,
    "ok": true
   },
   {
    "label": "passes starting wide %",
    "real": 49.8,
-   "sim": 48.4,
+   "sim": 47.9,
    "ok": true
   },
   {
    "label": "forward passes %",
    "real": 48.0,
-   "sim": 48.6,
+   "sim": 46.6,
    "ok": true
   },
   {
    "label": "backward passes %",
    "real": 20.4,
-   "sim": 21.9,
+   "sim": 23.5,
    "ok": true
   },
   {
    "label": "lateral passes %",
    "real": 31.7,
-   "sim": 29.5,
+   "sim": 29.9,
    "ok": true
   },
   {
-   "label": "passes by defenders %",
-   "real": 44.2,
-   "sim": 41.3,
+   "label": "passes per defender (% of team)",
+   "real": 10.9,
+   "sim": 10.9,
    "ok": true
   },
   {
-   "label": "passes by midfielders %",
-   "real": 41.9,
-   "sim": 33.5,
-   "ok": false
+   "label": "passes per midfielder (% of team)",
+   "real": 10.9,
+   "sim": 11.7,
+   "ok": true
   },
   {
-   "label": "passes by forwards %",
-   "real": 13.9,
-   "sim": 25.2,
-   "ok": false
+   "label": "passes per forward (% of team)",
+   "real": 6.6,
+   "sim": 7.1,
+   "ok": true
   },
   {
    "label": "accuracy, own third %",
    "real": 83.8,
-   "sim": 85.3,
+   "sim": 86.1,
    "ok": true
   },
   {
    "label": "accuracy, middle third %",
    "real": 86.6,
-   "sim": 85.7,
+   "sim": 86.4,
    "ok": true
   },
   {
    "label": "accuracy, final third %",
    "real": 73.7,
-   "sim": 75.7,
+   "sim": 76.4,
    "ok": true
   },
   {
    "label": "mean shot distance (m)",
    "real": 18.6,
-   "sim": 19.8,
+   "sim": 19.9,
    "ok": true
   },
   {
    "label": "shots from inside the box %",
    "real": 56.8,
-   "sim": 59.2,
+   "sim": 58.5,
    "ok": true
   }
  ],
@@ -149,8 +161,8 @@
     58.6
    ],
    "sim": [
-    44.9,
-    58.0
+    45.7,
+    57.7
    ]
   },
   {
@@ -160,8 +172,8 @@
     536.7
    ],
    "sim": [
-    358.4,
-    461.2
+    361.7,
+    468.9
    ]
   },
   {
@@ -171,8 +183,8 @@
     86.2
    ],
    "sim": [
-    78.3,
-    88.0
+    78.1,
+    88.4
    ]
   },
   {
@@ -182,8 +194,8 @@
     51.7
    ],
    "sim": [
-    36.6,
-    55.0
+    35.5,
+    53.3
    ]
   },
   {
@@ -193,8 +205,8 @@
     34.3
    ],
    "sim": [
-    23.5,
-    35.1
+    21.5,
+    34.6
    ]
   },
   {
@@ -204,8 +216,8 @@
     49.5
    ],
    "sim": [
-    46.2,
-    54.1
+    46.7,
+    55.7
    ]
   },
   {
@@ -216,7 +228,7 @@
    ],
    "sim": [
     17.3,
-    22.2
+    22.3
    ]
   },
   {
@@ -226,7 +238,7 @@
     14.3
    ],
    "sim": [
-    6.4,
+    6.5,
     12.7
    ]
   }
@@ -236,217 +248,217 @@
    "gap": -1.07,
    "win": {
     "real": 10.13,
-    "sim": 12.5
+    "sim": 11.67
    },
    "draw": {
     "real": 19.3,
-    "sim": 16.67
+    "sim": 18.33
    },
    "gf": {
     "real": 0.78,
-    "sim": 0.8
+    "sim": 0.69
    },
    "ga": {
     "real": 2.2,
-    "sim": 2.42
+    "sim": 2.31
    },
    "pass_share": {
     "real": 41.54,
-    "sim": 47.52
+    "sim": 46.79
    },
    "shot_share": {
     "real": 38.5,
-    "sim": 35.0
+    "sim": 34.59
    },
    "pass_acc": {
     "real": 80.03,
-    "sim": 80.59
+    "sim": 80.74
    }
   },
   {
    "gap": -0.45,
    "win": {
     "real": 20.47,
-    "sim": 30.0
+    "sim": 20.0
    },
    "draw": {
     "real": 26.17,
-    "sim": 24.17
+    "sim": 27.5
    },
    "gf": {
     "real": 0.97,
-    "sim": 1.02
+    "sim": 0.9
    },
    "ga": {
     "real": 1.66,
-    "sim": 1.43
+    "sim": 1.56
    },
    "pass_share": {
     "real": 46.62,
-    "sim": 48.67
+    "sim": 48.84
    },
    "shot_share": {
     "real": 45.03,
-    "sim": 44.88
+    "sim": 44.48
    },
    "pass_acc": {
     "real": 80.08,
-    "sim": 81.71
+    "sim": 82.37
    }
   },
   {
    "gap": -0.2,
    "win": {
     "real": 33.46,
-    "sim": 27.5
+    "sim": 28.33
    },
    "draw": {
     "real": 23.53,
-    "sim": 29.17
+    "sim": 30.83
    },
    "gf": {
     "real": 1.17,
-    "sim": 0.93
+    "sim": 1.09
    },
    "ga": {
     "real": 1.3,
-    "sim": 1.4
+    "sim": 1.29
    },
    "pass_share": {
     "real": 49.41,
-    "sim": 49.7
+    "sim": 49.37
    },
    "shot_share": {
     "real": 48.34,
-    "sim": 48.17
+    "sim": 45.23
    },
    "pass_acc": {
     "real": 81.2,
-    "sim": 82.45
+    "sim": 82.49
    }
   },
   {
    "gap": 0.0,
    "win": {
     "real": 30.45,
-    "sim": 39.17
+    "sim": 35.83
    },
    "draw": {
     "real": 39.1,
-    "sim": 28.33
+    "sim": 30.83
    },
    "gf": {
     "real": 1.15,
-    "sim": 1.32
+    "sim": 1.31
    },
    "ga": {
     "real": 1.15,
-    "sim": 1.07
+    "sim": 1.18
    },
    "pass_share": {
     "real": 50.0,
-    "sim": 50.08
+    "sim": 49.93
    },
    "shot_share": {
     "real": 50.0,
-    "sim": 50.69
+    "sim": 50.28
    },
    "pass_acc": {
     "real": 80.65,
-    "sim": 82.62
+    "sim": 83.18
    }
   },
   {
    "gap": 0.2,
    "win": {
     "real": 43.01,
-    "sim": 49.17
+    "sim": 44.17
    },
    "draw": {
     "real": 23.53,
-    "sim": 27.5
+    "sim": 23.33
    },
    "gf": {
     "real": 1.3,
-    "sim": 1.44
+    "sim": 1.38
    },
    "ga": {
     "real": 1.17,
-    "sim": 0.95
+    "sim": 1.12
    },
    "pass_share": {
     "real": 50.59,
-    "sim": 50.53
+    "sim": 50.7
    },
    "shot_share": {
     "real": 51.66,
-    "sim": 53.02
+    "sim": 52.85
    },
    "pass_acc": {
     "real": 81.29,
-    "sim": 83.1
+    "sim": 83.47
    }
   },
   {
    "gap": 0.45,
    "win": {
     "real": 53.37,
-    "sim": 44.17
+    "sim": 51.67
    },
    "draw": {
     "real": 26.17,
-    "sim": 27.5
+    "sim": 25.0
    },
    "gf": {
     "real": 1.66,
-    "sim": 1.38
+    "sim": 1.34
    },
    "ga": {
     "real": 0.97,
-    "sim": 0.96
+    "sim": 0.82
    },
    "pass_share": {
     "real": 53.38,
-    "sim": 51.17
+    "sim": 51.39
    },
    "shot_share": {
     "real": 54.97,
-    "sim": 57.67
+    "sim": 56.62
    },
    "pass_acc": {
     "real": 82.34,
-    "sim": 83.48
+    "sim": 84.13
    }
   },
   {
    "gap": 1.07,
    "win": {
     "real": 70.57,
-    "sim": 69.17
+    "sim": 64.17
    },
    "draw": {
     "real": 19.3,
-    "sim": 23.33
+    "sim": 21.67
    },
    "gf": {
     "real": 2.2,
-    "sim": 2.2
+    "sim": 2.02
    },
    "ga": {
     "real": 0.78,
-    "sim": 0.61
+    "sim": 0.82
    },
    "pass_share": {
     "real": 58.46,
-    "sim": 53.24
+    "sim": 52.71
    },
    "shot_share": {
     "real": 61.5,
-    "sim": 66.2
+    "sim": 63.76
    },
    "pass_acc": {
     "real": 84.99,
-    "sim": 84.98
+    "sim": 85.0
    }
   }
  ],
@@ -486,37 +498,68 @@
   {
    "depth": "10-20",
    "real": 3.59,
-   "sim": 3.14
+   "sim": 3.07
   },
   {
    "depth": "20-33",
    "real": 4.87,
-   "sim": 4.07
+   "sim": 4.05
   },
   {
    "depth": "33-50",
    "real": 6.39,
-   "sim": 5.21
+   "sim": 5.11
   }
  ],
  "formations": [
   {
    "formation": "4-4-2",
-   "real": 50,
-   "sim": 51.2,
-   "pass_acc": 83.3
+   "real": 0.4,
+   "se": 0.3,
+   "n": 912,
+   "sim": 1.3
   },
   {
    "formation": "4-3-3",
-   "real": 49,
-   "sim": 50.4,
-   "pass_acc": 82.8
+   "real": 0.3,
+   "se": 0.4,
+   "n": 615,
+   "sim": -1.0
   },
   {
    "formation": "4-5-1",
-   "real": 44,
-   "sim": 51.5,
-   "pass_acc": 83.6
+   "real": -0.6,
+   "se": 0.5,
+   "n": 399,
+   "sim": 0.3
+  },
+  {
+   "formation": "5-3-2",
+   "real": -2.1,
+   "se": 0.6,
+   "n": 255,
+   "sim": 0.9
+  },
+  {
+   "formation": "5-4-1",
+   "real": -1.1,
+   "se": 0.8,
+   "n": 156,
+   "sim": 0.4
+  },
+  {
+   "formation": "3-5-2",
+   "real": 0.8,
+   "se": 0.8,
+   "n": 141,
+   "sim": -2.3
+  },
+  {
+   "formation": "3-4-3",
+   "real": 1.9,
+   "se": 0.8,
+   "n": 122,
+   "sim": -0.4
   }
  ]
 }
