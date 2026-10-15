@@ -19,7 +19,7 @@ Each real frame is given to the model with only the formation, the ball and who 
 The model is close to what a per-team, in-sample linear fit can do. What is left (individual runs, marking, pressing) needs a model
 that looks at opponents, not only at the ball.
 
-## Where the ball goes: real vs simulator (`python -m gamepulse.spatial`, 14 comparisons, 12 within tolerance; was 1 of 14 at the start)
+## Where the ball goes: real vs simulator (`python -m gamepulse.spatial`, 16 comparisons, 14 within tolerance; was 1 of 14 at the start)
 | Quantity | Real | Simulator |
 |---|---|---|
 | forward / backward / lateral passes | 48 / 20 / 32% | 48 / 22 / 30% |
@@ -28,14 +28,17 @@ that looks at opponents, not only at the ball.
 | passes starting in the own third | 30% | 27% |
 | passes starting wide (more than 25 from the centre line) | 50% | 49% |
 | spread of pass start positions across the pitch (std of y) | 28.8 | 28.5 |
-| share of passes made by defenders / midfielders / forwards | 44 / 42 / 14% | 41 / 34 / 25% |
+| passes per defender / midfielder / forward, % of the team's passes | 10.9 / 10.9 / 6.6 | 10.9 / 11.7 / 7.1 |
+| passes starting in the final third | 22% | 32% |
+| passes starting in the last 20 units before goal | 7% | 16% |
 | defenders' median distance behind the ball when their team has it | 8.8 m | 16.9 m |
 | kilometres run by an outfield player in a match | 10.0 | 7.0 (movement inside a tick is not modelled) |
 What fixed the biggest gaps: accuracy by (third the pass starts in, third it ends in), taken from real passes (backward and sideways passes
 are safe, passes into the final third are not); a defender who goes to the ball where a failed pass lands (real: 87% of such balls are won in
 the defending team's own third); a stronger shooting propensity inside the box; passes weighted towards the full width of the pitch and towards
 the back line's circulation. The values were tuned with `tools/tune_flow.py` (bounded search with a penalty for leaving the starting point; fixed seeds).
-Forwards were the largest gap (a third of the passes); two changes from real tracking cut it to a quarter: a per-line position correction
+Forwards were the largest gap. Part of it was the measure: Wyscout files most wingers as midfielders (real line-ups average 4.05 defenders, 3.84
+midfielders, 2.1 forwards), so the shares are now compared per player. Per player, forwards were still too involved; two changes from real tracking cut it to a quarter: a per-line position correction
 (`tools/build_shape_correction.py`: in real matches the forwards stand about 10 m behind the ball in the final third and the midfielders 20 m, not on it;
 leave-matches-out placement error 13.57 -> 13.10 m) and off-ball drift of every player (real players spread about 14 m around the model's target, which
 gives the carrier options ahead of and behind the ball). Still open: forwards still make 25% of the passes (real: 14%), the ball still travels in a narrower band than in real matches, and a tactic's
@@ -59,9 +62,20 @@ compared:
 | even (0) | 30 / 39% | 1.15 / 1.32 | 1.15 / 1.07 | 50 / 50% | 50 / 51% | 80.7 / 82.6% |
 | much stronger (+1.07) | 71 / 69% | 2.20 / 2.20 | 0.78 / 0.61 | 58.5 / 53.2% | 61.5 / 66.2% | 85.0 / 85.0% |
 Quality acts mostly through finishing and goalkeeping (real strong teams score more of their shots), and through passing and the defending side's
-reading of the game. What is left: a stronger simulated side gets slightly too many shots and not enough of the ball (53% against 58.5%).
+reading of the game. What is left: a stronger simulated side gets slightly too many shots and not enough of the ball (53% against 58.5%). Real data shows why: a
+stronger side does not pass faster (18.6 to 19.5 passes per minute of possession at every strength gap), it keeps the ball longer, and its
+possessions end almost only on a failed pass, a shot or a clearance. In the simulator it reaches the final third too often (34% of its passes
+against 24%) and shoots too soon. Tried without a held-out gain: clearances as their own event, fewer tackles won, a deep-block effect,
+lines that drop when a side rarely has the ball, real pass destinations by zone, a joint evolution-strategy fit (branch `realism-wip`).
 Coaches choose a level for each side, named after league positions (title contender, European places, ..., relegation battle), in the live match
 and in the Lab.
+
+## Formations (`gamepulse/strength.py`)
+Read from the starting line-ups of the 1,446 real matches (number of defenders, midfielders and forwards as filed by Wyscout), once the strength
+gap is accounted for, the formation alone moves the share of the passes very little: 4-4-2 +0.4, 4-3-3 +0.3, 4-5-1 -0.6, 5-3-2 -2.1, 5-4-1 -1.1,
+3-5-2 +0.8, 3-4-3 +1.9 points (standard errors 0.3 to 0.8). A 20-match Premier League study (Bradley et al. 2011) reported 44% for 4-5-1 teams,
+which the larger data does not confirm once strength is accounted for. The simulator stays in the same small range but does not reproduce the
+sign for back-three systems.
 
 ## Do different tactics give different games? (`python -m gamepulse.styles`)
 The tables above are averages over all teams, which says nothing about style. This check compares the spread of 78 real teams (season

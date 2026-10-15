@@ -8,24 +8,24 @@ Regenerate with `python tools/fetch_wyscout.py && python -m gamepulse.calibratio
 Real: 2892 team-matches in France, Germany, Italy, Spain (2017/18).  Simulated: 200 team-matches (Balanced vs Balanced).
 metric                      real       sim
 ----------------------------------------------
-passes / team-match        427.6     401.5   ok
-pass accuracy %             82.9      82.4   ok
-mean pass length (m)        20.3      19.9   ok
-forward passes %            48.0      48.5   ok
-shots                       11.1      11.3   ok
+passes / team-match        427.6     401.6   ok
+pass accuracy %             82.9      83.1   ok
+mean pass length (m)        20.3      19.6   ok
+forward passes %            48.0      46.7   ok
+shots                       11.1      11.1   ok
 goals                        1.2       1.2   ok
-shot conversion %           10.5      11.0   ok
-fouls                       13.8      13.8   ok
+shot conversion %           10.5      11.1   ok
+fouls                       13.8      13.6   ok
 
 pass accuracy by length (%):
              0-10m  10-20m  20-30m  30-40m  40-50m    50m+
   real          82      89      85      77      65      45
-  sim           84      87      84      76      62      41
+  sim           84      88      84      77      64      43
 
 style bands (real top / bottom quartile of teams by pass share  vs  simulated Possession / Direct preset):
                  pass share  pass acc   fwd %   shots
   real high            59.3      86.6    45.4    13.5
-  sim possession       56.1      86.2    40.2    10.3
+  sim possession       56.0      86.5    39.5     9.8
   real low             42.6      79.1    50.5     9.5
-  sim direct           47.4      79.3    53.0    10.9
+  sim direct           47.4      79.9    52.4    11.0
 ```
