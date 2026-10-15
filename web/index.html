@@ -653,9 +653,9 @@ function renderRealism() {
     <div class="legend"><span><i class="dot" style="background:var(--accent)"></i>78 real teams (season averages)</span><span><i class="dot" style="background:var(--pink)"></i>48 random tactics</span></div></div>
   <div class="card"><h3>Defending <b>outfield defenders goal-side of the ball</b></h3>
     <table class="rv"><tr><th>Ball distance from goal</th><th>Real</th><th>Sim</th></tr>${r.defending.map(d => `<tr><td>${d.depth} (of 100)</td><td>${d.real.toFixed(1)}</td><td>${d.sim.toFixed(1)}</td></tr>`).join("")}</table>
-    <h3 style="margin-top:14px">Formations <b>possession vs a 4-3-3</b></h3>
-    <table class="rv"><tr><th>Formation</th><th>Premier League study</th><th>Sim</th></tr>${r.formations.map(f => `<tr><td>${f.formation}</td><td>${f.real}%</td><td>${f.sim}%</td></tr>`).join("")}</table>
-    <p class="src">Study: 20 Premier League matches, no significant difference between formations (standard deviation 6–8 points).</p></div>
+    <h3 style="margin-top:14px">Formations <b>effect on the share of passes, equal strength</b></h3>
+    <table class="rv"><tr><th>Formation</th><th>Real (matches)</th><th>Sim</th></tr>${r.formations.map(f => `<tr><td>${f.formation}</td><td>${f.real > 0 ? "+" : ""}${f.real} ± ${f.se} (${f.n})</td><td>${f.sim > 0 ? "+" : ""}${f.sim}</td></tr>`).join("")}</table>
+    <p class="src">In points of the share of passes, against an average opponent. In real matches the formation alone changes little (±2 points); the simulator stays in the same small range, but does not reproduce the sign for back-three systems.</p></div>
   <div class="card" style="grid-column:1/-1"><h3>Sources</h3>${r.sources.map(x => `<div class="src">${x}</div>`).join("")}
     <div class="src">Aggregated numbers only; no raw data is published. Report generated ${r.generated} with <code>python tools/realism_report.py</code>. Known gaps are listed in docs/REALISM_FINDINGS.md.</div></div>`;
   document.querySelectorAll("#rMet .chip").forEach(c => c.onclick = () => { rMetric = c.dataset.m; renderRealism(); });

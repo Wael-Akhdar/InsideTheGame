@@ -22,7 +22,7 @@ SPEC_ES = [("PASS", "dir_base", 0.8, 3.0), ("PASS", "lateral", 0.5, 2.5), ("PASS
            ("PASS", "dist_scale", 0.3, 1.2), ("PASS", "rw_df", 0.8, 3.0), ("PASS", "rw_mf", 0.5, 2.0), ("PASS", "rw_fw", 0.05, 1.0),
            ("PASS", "wide", 2.0, 30.0), ("PASS", "own_keep", 1.0, 12.0), ("PASS", "fin_back", 0.2, 2.0), ("PASS", "carry", 0.1, 1.5),
            ("WANDER", "sx", 4.0, 30.0), ("WANDER", "sy", 4.0, 25.0), ("SHOT", "p", 0.04, 0.16), ("SHOT", "box_near", 1.0, 6.0),
-           ("SHOT", "finish", 0.8, 1.6), ("CLEAR", "p", 0.05, 0.5), ("DUEL", "win", 0.05, 0.6), ("QUALITY", "pass", 0.001, 0.02),
+           ("SHOT", "finish", 0.8, 1.6), ("CLEAR", "p", 0.05, 0.5), ("DUEL", "win", 0.03, 0.6), ("PASS", "deep_w", 0.1, 1.0), ("QUALITY", "pass", 0.001, 0.02),
            ("QUALITY", "def", 0.001, 0.03), ("QUALITY", "keep", 0.0005, 0.03), ("QUALITY", "fin", 0.1, 1.5)]
 # Real targets for a strong side against a weak one (strength gap about 1.07, gamepulse/strength.py): share of the passes, of the shots,
 # and log ratio of goals. The simulator plays them with squad qualities 1 +/- QUALITY_PER_GAP * 1.07 / 2.

@@ -1,7 +1,7 @@
 """Build web/realism.json: every real-vs-simulated comparison in one file, shown in the app's Realism tab.
 
 Only aggregated numbers are written. Sources: Wyscout public dataset (CC BY 4.0, Pappalardo et al. 2019), Sportec Open DFL tracking
-(CC BY 4.0, Bassek et al. 2025), and one published study (Bradley et al. 2011) for formations.
+(CC BY 4.0, Bassek et al. 2025).
 
     python tools/realism_report.py          # a few minutes
 """
@@ -26,15 +26,13 @@ def _r(x, d=1):
 def main() -> None:
     from gamepulse import calibration as cal
     from gamepulse import spatial, strength, styles, validation as V
-    from gamepulse.lab import evaluate
     from gamepulse.simulator.match import QUALITY_PER_GAP
-    from gamepulse.tactics import Tactic
 
     t0 = time.time()
     rep: dict = {"generated": time.strftime("%Y-%m-%d"), "sources": [
         "Wyscout public soccer match event dataset, CC BY 4.0. Pappalardo et al. (2019), Scientific Data 6:236. 1,446 league matches (France, Germany, Italy, Spain 2017/18).",
         "Sportec Open DFL dataset, CC BY 4.0, with the authorization of the DFL. Bassek, Rein, Weber, Memmert (2025). 7 Bundesliga matches with full tracking.",
-        "Bradley et al. (2011), The effect of playing formation on high-intensity running and technical profiles in English FA Premier League soccer matches, Journal of Sports Sciences 29(8)."]}
+        "Formations read from the starting line-ups (number of defenders, midfielders and forwards as filed by Wyscout), effect measured once the strength gap is accounted for."]}
 
     R, S = cal.real_stats(), cal.sim_stats(n=100)
     labels = {"passes": "Passes per team", "pass_acc": "Pass accuracy %", "pass_len": "Mean pass length (m)", "fwd_share": "Forward passes %",
@@ -71,12 +69,9 @@ def main() -> None:
     rep["defending"] = [{"depth": k, "real": _r(rg[k], 2), "sim": _r(sg[k], 2)} for k in rg]
     print("tracking", time.time() - t0, flush=True)
 
-    lit = {"4-4-2": 50, "4-3-3": 49, "4-5-1": 44}
-    rows = []
-    for f in lit:
-        r = evaluate(Tactic(name=f, formation=f), ["Balanced 4-3-3"], n=60, workers=12)["matchups"][0]
-        rows.append({"formation": f, "real": lit[f], "sim": r["possession"], "pass_acc": r["pass_acc"]})
-    rep["formations"] = rows
+    real_f, sim_f = strength.real_formation_effects(), strength.sim_formation_effects(n=40)
+    rep["formations"] = [{"formation": f, "real": _r(real_f[f]["effect"]), "se": _r(real_f[f]["se"]), "n": real_f[f]["n"], "sim": _r(sim_f[f])}
+                         for f in strength.FORMATIONS if f in real_f]
     print("formations", time.time() - t0, flush=True)
 
     OUT.write_text(json.dumps(rep, indent=1))

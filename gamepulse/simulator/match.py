@@ -38,8 +38,8 @@ SHAPE = {"ball_shift_x": 0.3, "ball_shift_y": 0.2, "lh_in": 10.0, "lh_out": 24.0
          "gk_base": 5.0, "gk_ball": 0.08, "ax_scale": 1.0, "off_df": 0.0, "off_mf": 0.0, "off_fw": 0.0}
 
 
-PASS = {"wide": 17.006, "dir_base": 1.861, "lateral": 0.764, "fw_back": 0.569, "back": 0.227, "dist_scale": 0.465, "dist_base": 9.0, "dist_dir": 6.0, "acc_len": 1.0, "rw_gk": 1.0, "rw_df": 2.101,
-        "rw_mf": 0.887, "rw_fw": 0.086, "own_keep": 7.416, "fin_back": 0.231, "fwd_cap": 100.0, "carry": 0.705}  # receiver weights, see _pass
+PASS = {"wide": 19.3016, "dir_base": 1.7501, "lateral": 0.8226, "fw_back": 0.6057, "back": 0.2352, "dist_scale": 0.3653, "dist_base": 9.0, "dist_dir": 6.0, "acc_len": 1.0, "rw_gk": 1.0, "rw_df": 2.3204,
+        "rw_mf": 0.7331, "rw_fw": 0.1196, "own_keep": 5.6234, "fin_back": 0.2447, "fwd_cap": 100.0, "carry": 0.368, "prior": 0.0, "deep_w": 0.463, "carry_x": 70.0}  # receiver weights, see _pass
 LEN_X = [0, 5, 15, 25, 35, 45, 60]
 LEN_ADJ = [0.0, -0.05, 0.05, 0.06, 0.04, -0.03, -0.23]
 def _third(x: float) -> int:
@@ -52,18 +52,18 @@ ACC_X_ADJ = [-0.08, -0.07, -0.03, -0.01, 0.01, 0.07, -0.02, -0.13, -0.30]
 ACC_TABLE = [[0.02, 0.04, 0.0], [0.08, 0.06, -0.10], [0.12, 0.09, -0.15]]
 
 
-SHOT = {"p": 0.091, "box_near": 3.943, "finish": 1.306, "attr": 1.0}  # shooting propensity: base rate and the factor inside the box up to the six-yard line
-QUALITY = {"pass": 0.004, "def": 0.006, "fin": 1.0, "keep": 0.0}  # per attribute point: passer's technique and the defending side's reading of the game, on pass success
+SHOT = {"p": 0.0858, "box_near": 6.0, "finish": 1.1719, "attr": 1.0}  # shooting propensity: base rate and the factor inside the box up to the six-yard line
+QUALITY = {"pass": 0.0035, "def": 0.0081, "fin": 0.7885, "keep": 0.0007}  # per attribute point: passer's technique and the defending side's reading of the game, on pass success
 QUALITY_PER_GAP = 0.15  # squad quality gap per unit of real strength gap (log-goal ratio), see gamepulse/strength.py
 GOALSIDE = {"on": True, "df": 3.0}  # defending: the back line keeps goal-side of the ball
 MOVE = {"in": 0.7, "out": 1.0, "speed": 5.0, "react": 1.0}  # share of the gap to its target a player closes in one tick (attacking / defending)
 PINNED = 0.0  # how far a side's lines drop per unit of recent ball share below one half
 BLOCK = {"ref": 5.5, "acc": 0.0, "entry": 0.0, "shot": 0.0, "shot_ref": 3.0}  # pass accuracy per defender goal-side of the ball, relative to a typical block
 TEMPO_STYLE = 0.0  # how much a patient style raises the number of actions per match
-DUEL = {"win": 0.42}  # base chance that a tackle attempt wins the ball
+DUEL = {"win": 0.2175}  # base chance that a tackle attempt wins the ball
 TACKLE = 1.0  # scale of the tackle attempts by the closest defender
 REGAIN = {"go_to_ball": True}
-CLEAR = {"p": 0.17, "x": 30.0, "win": 0.35, "q": 0.0}  # clearances: under pressure in its own third a team hoofs the ball long and the second ball is contested
+CLEAR = {"p": 0.1135, "x": 30.0, "win": 0.35, "q": 0.0}  # clearances: under pressure in its own third a team hoofs the ball long and the second ball is contested
 
 
 def _load_correction():
@@ -71,7 +71,17 @@ def _load_correction():
     return json.loads(f.read_text())["table"] if f.exists() else None
 
 
-WANDER = {"sx": 14.109, "sy": 17.565, "tau": 40.0, "out": 1.0}  # players drift around their target (runs, drops): sd in pitch units and time constant in seconds
+# Where real passes go from each zone of the pitch (tools/build_zone_prior.py; Wyscout public dataset, CC BY 4.0, aggregated frequencies).
+_PRIOR = json.loads(Path(__file__).with_name("zone_prior.json").read_text())
+_NX, _NY = _PRIOR["nx"], _PRIOR["ny"]
+TRANS = np.array(_PRIOR["trans"])
+
+
+def zone_of(x: float, y: float) -> int:
+    return min(_NX - 1, max(0, int(x / 100 * _NX))) * _NY + min(_NY - 1, max(0, int(y / 100 * _NY)))
+
+
+WANDER = {"sx": 15.7198, "sy": 18.0472, "tau": 40.0, "out": 1.0}  # players drift around their target (runs, drops): sd in pitch units and time constant in seconds
 CORRECTION = _load_correction()  # how far real lines stand from the uncorrected model, by phase, line and ball depth (tools/build_shape_correction.py)
 
 
@@ -312,7 +322,7 @@ class MatchSimulator:
         # patient teams also move the ball forward by carrying it into open space (safe territorial gain)
         ahead = opp[opp[:, 0] > fx - 2]
         space = float(self._dists_m(me, ahead).min()) if len(ahead) else 40.0
-        carry_p = PASS["carry"] * (0.26 * (1 - P.tac.directness) + 0.03) * (1.0 if space > 6.5 else 0.0) * (0.0 if P.gk[c] or fx > 82 else 1.0)
+        carry_p = PASS["carry"] * (0.26 * (1 - P.tac.directness) + 0.03) * (1.0 if space > 6.5 else 0.0) * (0.0 if P.gk[c] or fx > PASS["carry_x"] else 1.0)
         r = rng.random()
         if r < shoot_p:
             self._shoot(P, D, t, evs, pressure)
@@ -385,6 +395,10 @@ class MatchSimulator:
             if fwd < -5 and P.line[c] == "FW":
                 w *= PASS["fw_back"]  # forwards lay the ball off less than midfielders recycle it
             w *= PASS["rw_" + P.team.players[i].position.lower()]
+            if rp[0] >= 80:
+                w *= PASS["deep_w"]  # the area near goal is crowded: passes into it are rarer than the open space suggests
+            if PASS["prior"]:
+                w *= TRANS[zone_of(float(me[0]), float(me[1])), zone_of(float(rp[0]), float(rp[1]))] ** PASS["prior"]  # where real passes go from here
             if rp[0] > 66.7 and me[0] <= 66.7:
                 w *= entry  # facing a packed block, teams recycle the ball rather than force it into the final third  # how often each line is the target of a pass
             if fwd < -5:
