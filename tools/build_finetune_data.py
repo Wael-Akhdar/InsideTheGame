@@ -327,12 +327,31 @@ async def _agent_example(TM, kind, planner, tools, question, lang, tactic=None):
         return None
     system = (TM.ANALYST_INSTRUCTIONS if kind == "analyst" else TM.COACH_INSTRUCTIONS
               + (f" The coach's current tactic is {tactic}." if tactic else "")) + f" Answer in {TM.LANG_NAMES[lang]}."
-    msgs = [{"role": "system", "content": system}, {"role": "user", "content": question},
-            {"role": "assistant", "content": None, "tool_calls": calls}]
-    for c, (_, r) in zip(calls, results):
+    msgs = [{"role": "system", "content": system}, {"role": "user", "content": question}]
+    for c, (_, r) in zip(calls, results):  # one tool call per assistant turn, then its result
+        msgs.append({"role": "assistant", "tool_calls": [c]})
         msgs.append({"role": "tool", "tool_call_id": c["id"], "content": json.dumps(r, ensure_ascii=False, default=str)})
     msgs.append({"role": "assistant", "content": answer})
-    return {"messages": msgs, "tools": [t.to_json_schema_spec() for t in tools]}
+    return {"messages": msgs, "tools": [_plain_schema(t.to_json_schema_spec()) for t in tools]}
+
+
+def _plain_schema(spec: dict) -> dict:
+    """Fine-tuning accepts plain JSON schemas: no titles, no null defaults, optional values as their base type."""
+    def clean(x):
+        if isinstance(x, dict):
+            if "anyOf" in x:
+                non_null = [a for a in x["anyOf"] if a.get("type") != "null"]
+                base = clean(non_null[0]) if non_null else {"type": "string"}
+                if "description" in x:
+                    base["description"] = x["description"]
+                return base
+            return {k: clean(v) for k, v in x.items() if k != "title" and not (k == "default" and v is None)}
+        if isinstance(x, list):
+            return [clean(v) for v in x]
+        return x
+    out = clean(spec)
+    out["function"]["parameters"].setdefault("properties", {})
+    return out
 
 
 def _en_hint(q: str) -> str:
