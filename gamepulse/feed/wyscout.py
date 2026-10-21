@@ -40,6 +40,10 @@ def clear_cache() -> None:
 
 
 def _league_events(league: str, match_id: int, cache: bool) -> list[dict]:
+    split = DATA / "by_match" / league / f"{match_id}.json.gz"
+    if split.exists():  # one match per file (tools/split_wyscout.py): a few MB of memory instead of a whole season
+        import gzip
+        return json.loads(gzip.decompress(split.read_bytes()))
     if cache and league in _EVENTS:
         return _EVENTS[league].get(match_id, [])
     with zipfile.ZipFile(DATA / "events.zip") as z:
