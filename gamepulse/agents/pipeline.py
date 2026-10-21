@@ -129,6 +129,26 @@ class ExplainerAgent(Agent):
         }.get(m.kind)
 
 
+HEADLINES = {
+    "en": {"goal": "GOAL! {player} ({team})", "own_goal": "OWN GOAL - {team} are credited", "big_chance": "Big chance for {player}!",
+           "momentum_swing": "{team} take control", "red_card": "RED CARD - {player}", "tactic_change": "{team} switch tactics",
+           "injury": "{player} ({team}) is hurt", "unlucky": "{team}: dominant, not rewarded", "pressing_fade": "{team}'s pressing is fading",
+           "key_player": "{player} runs {team}'s game", "turning_point": "Turning point for {team}", "other": "Key moment"},
+    "fr": {"goal": "BUT ! {player} ({team})", "own_goal": "CSC - but accordé à {team}", "big_chance": "Grosse occasion pour {player} !",
+           "momentum_swing": "{team} prend le contrôle", "red_card": "CARTON ROUGE - {player}", "tactic_change": "{team} change de tactique",
+           "injury": "{player} ({team}) est touché", "unlucky": "{team} domine sans être récompensé", "pressing_fade": "Le pressing de {team} faiblit",
+           "key_player": "{player} dirige le jeu de {team}", "turning_point": "Tournant pour {team}", "other": "Moment clé"},
+    "es": {"goal": "¡GOL! {player} ({team})", "own_goal": "GOL EN PROPIA - para {team}", "big_chance": "¡Ocasión clarísima para {player}!",
+           "momentum_swing": "{team} toma el control", "red_card": "TARJETA ROJA - {player}", "tactic_change": "{team} cambia de táctica",
+           "injury": "{player} ({team}) está tocado", "unlucky": "{team} domina sin premio", "pressing_fade": "La presión de {team} se apaga",
+           "key_player": "{player} dirige el juego de {team}", "turning_point": "Punto de inflexión para {team}", "other": "Momento clave"},
+    "ar": {"goal": "هدف! {player} ({team})", "own_goal": "هدف عكسي لصالح {team}", "big_chance": "فرصة كبيرة لـ{player}!",
+           "momentum_swing": "{team} يسيطر", "red_card": "بطاقة حمراء - {player}", "tactic_change": "{team} يغيّر خطته",
+           "injury": "{player} ({team}) مصاب", "unlucky": "{team} يسيطر دون مكافأة", "pressing_fade": "ضغط {team} يتراجع",
+           "key_player": "{player} يقود لعب {team}", "turning_point": "نقطة تحول لـ{team}", "other": "لحظة حاسمة"},
+}
+
+
 class NarratorAgent(Agent):
     """Turns a moment + explanation into broadcast-ready copy in the viewer's language and mode."""
     name = "narrator"
@@ -144,15 +164,22 @@ class NarratorAgent(Agent):
                   f"for a {MODES[v.mode]}. Use ONLY the given facts, do not invent numbers.")
         return system, facts
 
+    def translate(self, text: str, lang: str) -> str:
+        """The explanation in the viewer's language (model translation, every number checked); English when no model answers."""
+        if lang == "en" or not self.llm.enabled:
+            return text
+        out = self.llm.complete(f"Translate this football analysis into {LANGS[lang]}. Keep every number and every name exactly as written. "
+                                f"Reply with the translation only.", text, 160)
+        if out:
+            from .team import fact_check
+            if fact_check(out, [("source", text)], "")["grounded"]:
+                return out
+        return text
+
     def run(self, m: Moment, why: str, v: Viewer, state: MatchState, plain: Optional[str] = None) -> tuple[str, str]:
         player, team = self.pname(m.player), self.tname(m.team)
-        headline = {
-            "goal": (f"OWN GOAL - {team} are credited" if m.facts.get("own_goal") else f"GOAL! {player} ({team})"), "big_chance": f"Big chance for {player}!",
-            "momentum_swing": f"{team} take control", "red_card": f"RED CARD - {player}",
-            "tactic_change": f"{team} switch tactics", "injury": f"{player} ({team}) is hurt",
-            "unlucky": f"{team}: dominant, not rewarded", "pressing_fade": f"{team}'s pressing is fading",
-            "key_player": f"{player} runs {team}'s game", "turning_point": f"Turning point for {team}",
-        }.get(m.kind, "Key moment")
+        headline = HEADLINES.get(v.lang, HEADLINES["en"]).get("own_goal" if m.kind == "goal" and m.facts.get("own_goal") else m.kind,
+                                                               HEADLINES[v.lang if v.lang in HEADLINES else "en"]["other"]).format(player=player, team=team)
         system, facts = self.prompt(m, why, v, state)
         body = self.llm.complete(system, facts)
         if body is not None:
@@ -210,6 +237,7 @@ class Orchestrator:
                 continue
             why = self.explainer.run(m, self.state)
             headline, body = self.narrator.run(m, why, viewer, self.state, self.explainer.plain(m, self.state))
+            why = self.narrator.translate(why, viewer.lang)
             overlays.append(Overlay(m.minute, m.kind, headline, body, why, m.evidence, rel, viewer.lang, viewer.mode,
                                     t=ev.minute * 60 + ev.second, duration=10.0 if m.score >= 0.8 else 7.0,
                                     team=m.team, player=m.player))

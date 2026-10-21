@@ -94,22 +94,60 @@ def mirror(scn: dict[str, Any]) -> dict[str, Any]:
     return out
 
 
-def describe_rule(r: dict[str, Any]) -> str:
+_W = {  # words of the scenario descriptions, per language
+    "en": {"you": "your team", "opp": "the opponent", "trailing": "is trailing", "not_ahead": "is not ahead", "leading": "is leading",
+           "not_behind": "is not behind", "if": "if", "red": "red card for {w}", "goal": "goal for {w}", "injury": "injury to a player of {w}",
+           "fatigue": "{w} tire (+{p}% fatigue)", "change": "{w} change", "min": "{m}'",
+           "keys": {"line_height": "line height", "pressing": "pressing", "width": "width", "tempo": "tempo", "directness": "directness", "formation": "formation"}},
+    "fr": {"you": "votre équipe", "opp": "l'adversaire", "trailing": "est menée", "not_ahead": "ne mène pas", "leading": "mène",
+           "not_behind": "n'est pas menée", "if": "si", "red": "carton rouge pour {w}", "goal": "but pour {w}", "injury": "blessure d'un joueur de {w}",
+           "fatigue": "{w} fatigue (+{p} % de fatigue)", "change": "{w} change", "min": "{m}e min",
+           "keys": {"line_height": "hauteur du bloc", "pressing": "pressing", "width": "largeur", "tempo": "tempo", "directness": "jeu direct", "formation": "système"}},
+    "es": {"you": "tu equipo", "opp": "el rival", "trailing": "va perdiendo", "not_ahead": "no va ganando", "leading": "va ganando",
+           "not_behind": "no va perdiendo", "if": "si", "red": "tarjeta roja para {w}", "goal": "gol de {w}", "injury": "lesión de un jugador de {w}",
+           "fatigue": "{w} se cansa (+{p}% de fatiga)", "change": "{w} cambia", "min": "min {m}",
+           "keys": {"line_height": "altura de la línea", "pressing": "presión", "width": "amplitud", "tempo": "ritmo", "directness": "juego directo", "formation": "sistema"}},
+    "ar": {"you": "فريقك", "opp": "المنافس", "trailing": "متأخر", "not_ahead": "غير متقدم", "leading": "متقدم", "not_behind": "غير متأخر",
+           "if": "إذا كان", "red": "بطاقة حمراء لـ{w}", "goal": "هدف لـ{w}", "injury": "إصابة لاعب من {w}", "fatigue": "إرهاق {w} (+{p}%)",
+           "change": "{w} يغيّر", "min": "الدقيقة {m}",
+           "keys": {"line_height": "ارتفاع الخط", "pressing": "الضغط", "width": "العرض", "tempo": "الإيقاع", "directness": "اللعب المباشر", "formation": "الخطة"}},
+}
+
+
+def describe_rule(r: dict[str, Any], lang: str = "en") -> str:
+    """One scenario rule in plain words, in English, French, Spanish or Arabic."""
+    w = _W.get(lang, _W["en"])
     a, t = r["action"], r["trigger"]
-    who = "your team" if a["team"] == "home" else "the opponent"
-    when = f"{t['minute']}'"
+    who = w["you"] if a["team"] == "home" else w["opp"]
+    when = w["min"].format(m=t["minute"])
     if "if" in t:
         c = t["if"]
-        cw = "your team" if c["team"] == "home" else "the opponent"
+        cw = w["you"] if c["team"] == "home" else w["opp"]
         if "score_diff_lte" in c:
-            when += f" if {cw} {'is trailing' if c['score_diff_lte'] < 0 else 'is not ahead'} (diff ≤ {c['score_diff_lte']})"
+            when += f" {w['if']} {cw} {w['trailing'] if c['score_diff_lte'] < 0 else w['not_ahead']} (≤ {c['score_diff_lte']})"
         if "score_diff_gte" in c:
-            when += f" if {cw} {'is leading' if c['score_diff_gte'] > 0 else 'is not behind'} (diff ≥ {c['score_diff_gte']})"
-    what = {"red_card": f"red card for {who}" + (f" ({a['player']})" if a.get("player") else ""),
-            "goal": f"goal for {who}", "injury": f"injury to a player of {who}" + (f" ({a['player']})" if a.get("player") else ""),
-            "fatigue": f"{who} tire (+{round(a.get('amount', 0) * 100)}% fatigue)",
-            "tactic_change": f"{who} change: " + ", ".join(f"{k} → {v if isinstance(v, str) else round(v * 100)}" for k, v in a.get("changes", {}).items())}[a["type"]]
+            when += f" {w['if']} {cw} {w['leading'] if c['score_diff_gte'] > 0 else w['not_behind']} (≥ {c['score_diff_gte']})"
+    player = f" ({a['player']})" if a.get("player") else ""
+    if a["type"] == "tactic_change":
+        what = w["change"].format(w=who) + ": " + ", ".join(
+            f"{w['keys'].get(k, k)} → {v if isinstance(v, str) else round(v * 100)}" for k, v in a.get("changes", {}).items())
+    elif a["type"] == "fatigue":
+        what = w["fatigue"].format(w=who, p=round(a.get("amount", 0) * 100))
+    else:
+        what = w[{"red_card": "red", "goal": "goal", "injury": "injury"}[a["type"]]].format(w=who) + (player if a["type"] != "goal" else "")
     return f"{when} · {what}"
+
+
+SCENARIO_NAMES = {  # preset names shown in the selector, per language
+    "Red card for us at 30'": {"fr": "Carton rouge pour nous à la 30e", "es": "Roja para nosotros en el 30", "ar": "بطاقة حمراء لنا في الدقيقة 30"},
+    "Opponent sees red at 55'": {"fr": "Rouge pour l'adversaire à la 55e", "es": "Roja para el rival en el 55", "ar": "بطاقة حمراء للمنافس في الدقيقة 55"},
+    "Going 2-0 down early": {"fr": "Mené 2-0 très tôt", "es": "Perder 2-0 pronto", "ar": "التأخر 2-0 مبكراً"},
+    "All-out attack when trailing (from 65')": {"fr": "Tout pour l'attaque si on est mené (dès la 65e)", "es": "Todo al ataque si perdemos (desde el 65)",
+                                                "ar": "هجوم شامل عند التأخر (من الدقيقة 65)"},
+    "Opponent parks the bus from 60'": {"fr": "L'adversaire gare le bus dès la 60e", "es": "El rival aparca el autobús desde el 60",
+                                        "ar": "المنافس يتكتل دفاعياً من الدقيقة 60"},
+    "Key defender injured at 40'": {"fr": "Défenseur clé blessé à la 40e", "es": "Defensa clave lesionado en el 40", "ar": "إصابة مدافع أساسي في الدقيقة 40"},
+}
 
 
 PRESET_SCENARIOS: dict[str, dict[str, Any]] = {

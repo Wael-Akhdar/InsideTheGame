@@ -21,7 +21,7 @@ dx = shift when the team defends (-10 drops deeper .. 10 steps up), spread = wid
 dr = dribbling tendency (0 never .. 2 always), sh = shooting tendency (0 .. 2), fw = preference for forward passes (-0.4 .. 0.6),
 pr = pressing willingness (0 .. 2), sf = safe passing preference (-0.2 .. 0.5).
 Typical values for reference: {', '.join(f"{k}={ {p: ROLES[k][p] for p in ROLE_PARAMS} }" for k in ('winger', 'anchor', 'poacher'))}.
-Return JSON: {{"label": "<=4 words", "summary": "one sentence: what you understood", "params": {{...all 8 numbers...}}}}."""
+Return JSON: {{"label": "<=4 words", "summary": "one sentence in the coach's language: what you understood", "params": {{...all 8 numbers...}}}}."""
 
 _SCENARIO_SYSTEM = f"""You translate a football coach's imagined situation into scenario rules for a match simulator.
 Output JSON {{"name": "...", "rules": [rule, ...]}} where rule = {{"trigger": {{"minute": 0-95, "if": optional
@@ -29,7 +29,8 @@ Output JSON {{"name": "...", "rules": [rule, ...]}} where rule = {{"trigger": {{
 "home" is the coach's team, "away" the opponent. score_diff = goals of `team` minus goals of the other team.
 Actions: {{"type":"red_card","team":..,"player": optional slot like "LCB"}}, {{"type":"goal","team":..}}, {{"type":"injury","team":..,"player": optional slot}},
 {{"type":"fatigue","team":..,"amount":0-0.3}}, {{"type":"tactic_change","team":..,"changes":{{any of {list(INSTRUCTIONS)} as 0-1 numbers, and/or "formation": "4-2-3-1"}}}}.
-"Going all out", "park the bus", "press high" are tactic_change rules. Use at most 8 rules. Only use what the coach says."""
+"Going all out", "park the bus", "press high" are tactic_change rules. Use at most 8 rules. Only use what the coach says.
+Also add "summary": one or two sentences, in the language requested, telling the coach what you understood and what will happen."""
 
 
 # ----------------------------------------------------------------------------- roles
@@ -65,17 +66,22 @@ def _keyword_role(text: str, line: str) -> dict[str, float]:
     return p
 
 
-def interpret_role(text: str, line: str = "MF", llm: Optional[LLM] = None) -> dict[str, Any]:
+LANG_NAMES = {"en": "English", "fr": "French", "es": "Spanish", "ar": "Arabic"}
+_OFFLINE = {"en": "Understood from keywords only (the AI model is not connected).", "fr": "Compris par mots-clés uniquement (le modèle d'IA n'est pas connecté).",
+            "es": "Entendido solo por palabras clave (el modelo de IA no está conectado).", "ar": "فُهم عبر الكلمات المفتاحية فقط (نموذج الذكاء الاصطناعي غير متصل)."}
+
+
+def interpret_role(text: str, line: str = "MF", llm: Optional[LLM] = None, lang: str = "en") -> dict[str, Any]:
     """Description -> sanitized role dict (+ `summary`, `source`)."""
     text = (text or "").strip()[:300]
     llm = llm or LLM()
-    out = llm.complete_json(_ROLE_SYSTEM, f"Line: {line}. Coach says: {text}") if text else None
+    out = llm.complete_json(_ROLE_SYSTEM, f"Line: {line}. Answer the summary in {LANG_NAMES.get(lang, 'English')}. Coach says: {text}") if text else None
     if out and isinstance(out.get("params"), dict):
         role = sanitize_role(out["params"], out.get("label") or text[:30], text)
         role["summary"], role["source"] = str(out.get("summary", ""))[:200], "llm"
         return role
     role = sanitize_role(_keyword_role(text, line), (text.split(",")[0].split(".")[0])[:28].strip().capitalize() or "Custom role", text)
-    role["summary"], role["source"] = "Understood from keywords (connect Azure OpenAI for full natural-language understanding).", "rules"
+    role["summary"], role["source"] = _OFFLINE.get(lang, _OFFLINE["en"]), "rules"
     return role
 
 
@@ -130,15 +136,17 @@ def _keyword_scenario(text: str) -> dict[str, Any]:
     return {"name": text[:50], "rules": rules}
 
 
-def interpret_scenario(text: str, llm: Optional[LLM] = None) -> dict[str, Any]:
-    """Free text -> sanitized scenario {"name", "rules", "source", "explain"}."""
+def interpret_scenario(text: str, llm: Optional[LLM] = None, lang: str = "en") -> dict[str, Any]:
+    """Free text -> sanitized scenario {"name", "rules", "source", "explain", "summary"} (summary and explain in `lang`)."""
     text = (text or "").strip()[:500]
     llm = llm or LLM()
-    raw = llm.complete_json(_SCENARIO_SYSTEM, text, 700) if text else None
+    raw = llm.complete_json(_SCENARIO_SYSTEM, f"Language for the summary: {LANG_NAMES.get(lang, 'English')}. Coach says: {text}", 700) if text else None
     source = "llm"
     scn = sanitize(raw, text[:50]) if raw else {"rules": []}
+    summary = str(raw.get("summary", ""))[:400] if raw else ""
     if not scn["rules"]:
-        scn, source = sanitize(_keyword_scenario(text), text[:50]), "rules"
+        scn, source, summary = sanitize(_keyword_scenario(text), text[:50]), "rules", _OFFLINE.get(lang, _OFFLINE["en"])
     scn["source"] = source
-    scn["explain"] = [describe_rule(r) for r in scn["rules"]]
+    scn["summary"] = summary
+    scn["explain"] = [describe_rule(r, lang) for r in scn["rules"]]
     return scn

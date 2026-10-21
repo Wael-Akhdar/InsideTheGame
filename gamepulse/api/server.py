@@ -19,7 +19,7 @@ from ..mcp_server import mcp as mcp_server
 from ..overlay import build_feed, export_overlay
 from ..strength import LEVELS, quality_for
 from ..lab import evaluate, what_if
-from ..scenario import PRESET_SCENARIOS, describe_rule, sanitize
+from ..scenario import PRESET_SCENARIOS, SCENARIO_NAMES, describe_rule, sanitize
 from ..feed import SimulatorFeed
 from ..feed.sportec import DataMissing as SportecMissing
 from ..feed.sportec import SportecFeed
@@ -27,6 +27,7 @@ from ..feed.wyscout import LEAGUES, DataMissing, WyscoutFeed, list_matches
 from ..simulator.match import MatchSimulator
 from ..tactics import PRESETS, describe_catalog, get_formation, resolve_tactic
 
+LANGS = ("en", "fr", "es", "ar")
 SESSIONS: dict[str, dict[str, Any]] = {}  # live match sessions: speed / pause / queued coach commands
 
 _mcp_app = mcp_server.streamable_http_app(streamable_http_path="/", stateless_http=True, host="0.0.0.0")  # MCP endpoint at /mcp/ (same tools as `python -m gamepulse.mcp_server`)
@@ -60,6 +61,11 @@ def index():
     return FileResponse(WEB / "index.html")
 
 
+@app.get("/i18n.js")
+def i18n():
+    return FileResponse(WEB / "i18n.js", media_type="application/javascript")
+
+
 @app.get("/api/realism")
 def realism():
     """Every real-vs-simulated comparison (aggregates only), built by tools/realism_report.py."""
@@ -73,7 +79,9 @@ def realism():
 def catalog():
     cat = describe_catalog()
     cat["levels"] = {k: {"strength": v[0], "label": v[1]} for k, v in LEVELS.items()}
-    cat["scenarios"] = {k: {**v, "explain": [describe_rule(r) for r in v["rules"]]} for k, v in PRESET_SCENARIOS.items()}
+    cat["scenarios"] = {k: {**v, "explain": [describe_rule(r) for r in v["rules"]],
+                            "explain_i18n": {lg: [describe_rule(r, lg) for r in v["rules"]] for lg in LANGS},
+                            "names": {"en": k, **SCENARIO_NAMES.get(k, {})}} for k, v in PRESET_SCENARIOS.items()}
     return cat
 
 
@@ -88,13 +96,15 @@ def formation(name: str):
 @app.post("/api/ai/role")
 async def ai_role(body: dict = Body(...)):
     """Coach describes what a player should do -> role parameters (LLM if configured, keywords otherwise)."""
-    return await run_in_threadpool(interpret_role, str(body.get("text", "")), str(body.get("line", "MF")))
+    lang = body.get("lang") if body.get("lang") in LANGS else "en"
+    return await run_in_threadpool(interpret_role, str(body.get("text", "")), str(body.get("line", "MF")), None, lang)
 
 
 @app.post("/api/ai/scenario")
 async def ai_scenario(body: dict = Body(...)):
     """Coach describes a situation to test -> validated scenario rules."""
-    return await run_in_threadpool(interpret_scenario, str(body.get("text", "")))
+    lang = body.get("lang") if body.get("lang") in LANGS else "en"
+    return await run_in_threadpool(interpret_scenario, str(body.get("text", "")), None, lang)
 
 
 @app.get("/api/feeds/wyscout/{league}")
@@ -144,6 +154,7 @@ async def stream(seed: int = 42, speed: float = 60.0, mode: str = "casual", lang
     sess["ctx"] = MatchContext(orch.state, *feed.teams)  # what the match analyst agent can see while this match runs
     viewer = Viewer(mode=mode if mode in ("casual", "analyst") else "casual", lang=lang if lang in ("en", "fr", "es", "ar") else "en",
                     favorite_team=team, focus_player=player)
+    sess["viewer"] = viewer  # language and view can be changed while the match runs
 
     def team_meta(t):
         return {"id": t.id, "name": t.name, "tactic": t.tactic.to_dict() if t.tactic else None,
@@ -163,7 +174,7 @@ async def stream(seed: int = 42, speed: float = 60.0, mode: str = "casual", lang
                 if wait:
                     await asyncio.sleep(wait)
                 prev = max(prev, tk.t)
-                overlays = orch.process_tick(tk, viewer)
+                overlays = await run_in_threadpool(orch.process_tick, tk, viewer)  # model calls must not block the server
                 payload = {"frame": tk.frame, "events": [e.to_dict() for e in tk.events],
                            "snapshot": orch.state.snapshot(), "overlays": [o.to_dict() for o in overlays]}
                 yield f"data: {json.dumps(payload)}\n\n"
@@ -210,12 +221,18 @@ async def match_control(body: dict = Body(...)):
         sess["speed"] = max(1.0, min(float(body["speed"]), 2000.0))
     if "paused" in body:
         sess["paused"] = bool(body["paused"])
+    viewer = sess.get("viewer")
+    if viewer is not None and body.get("lang") in LANGS:
+        viewer.lang = body["lang"]
+    if viewer is not None and body.get("mode") in ("casual", "analyst"):
+        viewer.mode = body["mode"]
     if body.get("tactic"):  # {"team": "home"|"away", "spec": <preset name | partial changes | full tactic>}
         t = body["tactic"]
         sess["queue"].append({"type": "tactic", "team": "away" if t.get("team") == "away" else "home", "spec": t.get("spec")})
     text = body.get("scenario_text")
     if text or body.get("scenario"):
-        scn = await run_in_threadpool(interpret_scenario, text) if text else sanitize(body["scenario"])
+        lang = body.get("lang") if body.get("lang") in LANGS else "en"
+        scn = await run_in_threadpool(interpret_scenario, text, None, lang) if text else sanitize(body["scenario"])
         sess["queue"].append({"type": "scenario", "scenario": scn})
         reply["scenario"] = scn
     return reply
@@ -238,11 +255,12 @@ async def ask(body: dict = Body(...)):
 async def lab_whatif(body: dict = Body(...)):
     """Same seeds with and without a scenario: {"tactic", "scenario" (obj or "text"), "opponents", "n"}."""
     tactic = resolve_tactic(body.get("tactic"))
-    scn = interpret_scenario(body["text"]) if body.get("text") else sanitize(body.get("scenario"))
+    lang = body.get("lang") if body.get("lang") in LANGS else "en"
+    scn = interpret_scenario(body["text"], None, lang) if body.get("text") else sanitize(body.get("scenario"))
     opponents = body.get("opponents") or [p for p in PRESETS.values() if p.name != tactic.name]
     n = max(4, min(int(body.get("n", 20)), 60))
     res = await run_in_threadpool(what_if, tactic, scn, opponents[:6], n, 1000, body.get("level"), body.get("opponent_level"))
-    res["explain"] = [describe_rule(r) for r in scn["rules"]]
+    res["explain"] = [describe_rule(r, lang) for r in scn["rules"]]
     return res
 
 
