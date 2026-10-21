@@ -1,93 +1,98 @@
 # GamePulse
 
 **Feel the match, understand the moment.**
-A tactical football lab and live match intelligence engine. Coaches design a formation, give every player a role, set team instructions, then watch the match unfold live (22 players on the pitch, live charts) or stress-test the tactic over hundreds of simulated matches against other tactics. A multi-agent AI layer explains every key moment, in the viewer's language and style.
+AI match intelligence and a tactical lab for football: multi-agent explanations of what happens on the pitch, in the viewer's language,
+and a match simulator a coach can trust because every number is checked against real football.
 
-Built for the *Inside the Game: Developer Hackathon* (Microsoft x Premier League). All data is synthetic: clubs and players are fictional.
+**[▶ Live demo](https://gamepulse.lemonbay-43a4c2ef.polandcentral.azurecontainerapps.io)** · Demo video: *link added at submission* ·
+Built for the *Inside the Game: Developer Hackathon* (Microsoft x Premier League).
 
-## Simulated or real: one pipeline
-Everything the analysis sees goes through an **event contract** (`docs/EVENT_CONTRACT.md`): line-ups and a stream of events.
-The simulator is one source; a real match from the public Wyscout dataset (CC BY 4.0, pseudonymised) is another, selectable in the
-Live match tab ("Data source"). On 180 real matches the events rebuild the official score every time, and a real Bundesliga match with player tracking (positions of all 22 players) plays on the pitch.
-Quality audit on real matches: `docs/REAL_MATCH_AUDIT.md`. Real-match data: Bassek et al. (2025), Sportec Open DFL dataset (CC BY 4.0, with the authorization of the DFL); Pappalardo et al. (2019), *A public data set of spatio-temporal match events in soccer competitions*, Scientific Data 6:236.
+![Live match: 22 players, live charts and explained insights](docs/img/live.png)
 
-## Insights the TV does not show
-A goal is obvious on screen. GamePulse looks for what is not (`gamepulse/engine/insights.py`):
-- **Dominant, not rewarded**: a team far ahead in expected goals but level or behind.
-- **Pressing is fading**: pressing activity well below its early-match level while the opponent gains time on the ball.
-- **Key player**: one outfield player involved in a disproportionate share of his team's passing.
-- **Turning point**: how the balance of chances moved after a tactical change or a red card.
+## What it does
+**For fans and broadcasters** (Live match tab)
+- A match plays live: 22 players on the pitch, possession, expected goals, pressing and momentum charts.
+- Agents detect what the TV does not show (a team dominant but not rewarded, a pressing that fades, the player everything goes
+  through, the turning point after a tactical change) and **explain why it matters**, citing the events behind every claim.
+- **English, French, Spanish, Arabic** (right-to-left): the whole interface, the insights and the agents' answers. Casual or analyst
+  view, favourite team, follow a player.
+- **Ask the match analyst** anything about the match; it answers from the engine's numbers.
+- Works on simulated matches **and on real matches** (public Wyscout data, pseudonymised), through the same event contract.
+- Every insight is also exported as **timestamped overlay JSON** for a broadcast renderer (`/api/overlay`).
 
-Each insight cites the events that justify it. The detectors read only the event stream and the line-ups, like a real data feed,
-never the simulator's internals, so the same code can run on real matches.
+**For coaches** (Tactics and Tactic Lab tabs)
+- 75 formations, a role per player (or **described in plain words** and translated by the AI), five team instructions.
+- Choose **your level and the opponent's** (from title contender to relegation battle, calibrated on real leagues).
+- Run hundreds of matches against other tactics: wins, draws, losses, expected goals, possession, PPDA and a plain diagnosis.
+- **What-if**: the same matches with and without a scenario ("red card at 30'", "we switch to 5-4-1 at 70' if we lead").
+- **Coach live** while the match runs, or **ask the tactics coach**, which answers by running the simulations.
 
-## What a coach can do
-- Pick any of **75 formations** (or type your own shape), and give every player a role. Roles can be **described in plain
-  language** ("stay wide, beat his man, cross early") and are translated by AI.
-- Test **scenarios**: presets or free text ("red card for my centre-back at 30', then the opponent scores at 40'").
-- **Coach live**: change speed, pause, switch tactics or inject events while the match runs.
-- **What-if**: compare a tactic with and without a scenario over many matches (same seeds, so differences come from the change).
+![Tactic Lab](docs/img/lab.png)
 
-Simulator realism is checked against real match statistics (`docs/CALIBRATION.md`; data: Pappalardo et al. 2019, CC BY 4.0).
-
-See `docs/ROADMAP.md` for the vision, ideas (replaying real matches, scouting, set pieces...) and what the rules allow regarding video.
-
-## Three modes
-1. **Live match**: 22 players move on a pitch in real time; possession, xG, pressing and momentum charts update live; agents write explained insights.
-2. **Tactics**: formation (4-3-3, 4-4-2, 4-2-3-1, 3-5-2, 5-3-2, 3-4-3), one role per player, five team instructions (line height, pressing, width, tempo, directness). Saved in the browser, exportable as JSON.
-3. **Tactic Lab**: plays your tactic against any set of opponents (n matches each, half home / half away, in parallel) and reports W/D/L, xG balance, possession, PPDA, a robustness score and a plain-language diagnosis (e.g. "your high line is exposed by direct play").
-
-## Pipeline
-
-```
- Simulator ──> Stats engine ──> Moment detector ──> Explainer ──> Narrator ──> Persona ──> Overlay JSON ──> Web UI
- (events)      (xG, momentum,   (goals, chances,    (why it       (language,   (mode, club,  (timed, machine-
-               pass difficulty)  swings, cards)      matters)      tone)        player)      readable)
-```
-
-## Agents and MCP
-
-Microsoft Agent Framework agents answer questions with the engine as tools, and every number they write is fact-checked against
-the tool results. The same tools are served over MCP (`python -m gamepulse.mcp_server`, or `/mcp/` on the API). See `docs/AGENTS.md`.
+## Built on Microsoft
+| Technology | How GamePulse uses it |
+|---|---|
+| **Microsoft Agent Framework** | Match Analyst and Tactics Coach agents with function tools, a router, and a fact-checker on every answer (`gamepulse/agents/team.py`). |
+| **Microsoft Foundry / Azure OpenAI** | `gpt-4.1-mini` **fine-tuned** into a GamePulse commentator (4 languages, grounded), deployed with the DefaultV2 guardrails. |
+| **MCP** | The engine, the Lab and the agents as MCP tools: `python -m gamepulse.mcp_server`, or `/mcp/` on the live app. |
+| **Azure Container Apps** | The live demo (scale to zero), image built by GitHub Actions; a managed identity keeps the model deployed. |
+| **GitHub** (Actions, Container Registry) | Every push to `main` builds and publishes the container image. |
 
 ```
- question -> Router -> Match Analyst (live match tools) | Tactics Coach (simulation tools) -> Fact-checker -> answer + tool trace
+ feed (simulator | real match) ─> event contract ─> Stats ─> Moment detectors ─> Explainer ─> Narrator ─> Fact-checker ─> Persona ─> overlay JSON / UI
+ question ─> Router ─┬─> Match Analyst  (match_snapshot, key_moments, player_report, top_players)
+                     └─> Tactics Coach  (test_tactic, what_if, list_tactics, realism)  ─> Fact-checker ─> answer + tool trace
 ```
 
-## Quick start
+![Tactics coach answering with a simulation, tool trace and fact-check](docs/img/coach.png)
 
+## Why you can trust it
+**The numbers come from the engine, never from the model.** The model plans tool calls and writes; a fact-checker rejects any sentence
+containing a number that is not in the tool results. Evaluation of the fine-tuned model on matches it never saw
+(`tools/eval_model.py`): **40/40 overlay sentences grounded and in the right language** (English, French, Spanish, Arabic), **6/6 agent
+answers grounded**.
+
+**The simulator is validated against real football**, and the app shows it (Realism tab):
+- match totals (passes, accuracy, shots, goals, conversion, fouls): **8/8** within tolerance of 1,446 real league matches;
+- where the ball goes (thirds, flanks, direction, accuracy by zone, shot locations): **14/16** checks;
+- player placement against real tracking (7 Bundesliga matches): **13 m** mean error, against 20 m for a fixed formation;
+- team level: a strength gap changes wins, goals and shots as it does in real leagues (Poisson strength model);
+- tactics change the game as much as real teams differ (pass share, accuracy, shots).
+
+Known gaps are listed, not hidden: `docs/REALISM_FINDINGS.md`.
+
+![Realism tab](docs/img/realism.png)
+
+## Run it
 ```bash
-python3 -m venv .venv && source .venv/bin/activate
 pip install -r requirements.txt
-cp .env.example .env            # optional: add Azure OpenAI / Foundry credentials
-python -m pytest -q -p no:anyio tests
-uvicorn gamepulse.api.server:app --reload
-# open http://127.0.0.1:8000   (add #demo to auto-start a match, #lab to auto-run the lab)
+python tools/fetch_wyscout.py && python tools/split_wyscout.py   # optional: real matches (public Wyscout data, CC BY 4.0)
+uvicorn gamepulse.api.server:app --port 8000                     # open http://localhost:8000
+python -m pytest -q -p no:anyio tests                             # 40 tests, offline
 ```
+Without Azure credentials everything runs offline: the same agents and tools, with a deterministic planner in place of the model.
+To use the fine-tuned model, set `AZURE_OPENAI_ENDPOINT`, `AZURE_OPENAI_API_KEY` and `AZURE_OPENAI_DEPLOYMENT` (see `.env.example`).
+Container: `docker build -t gamepulse .`. MCP: `python -m gamepulse.mcp_server` (stdio) or the `/mcp/` endpoint.
 
-Without Azure credentials the narrator uses deterministic templates, so everything runs offline.
-With `AZURE_OPENAI_*` set, narration and translation go through your Foundry deployment.
+## Data and licences
+- Clubs and players of simulated matches are fictional. Real matches are **pseudonymised** (no real player or club names are shown).
+- Wyscout public dataset: Pappalardo et al. (2019), *A public data set of spatio-temporal match events in soccer competitions*,
+  Scientific Data 6:236, CC BY 4.0.
+- Sportec Open DFL dataset: Bassek, Rein, Weber, Memmert (2025), CC BY 4.0, with the authorization of the DFL.
+- Raw data is never committed; only aggregated statistics are published. Details: `docs/DATA_SOURCES.md`.
 
-## Layout
-
+## Repository
 | Path | What |
 |---|---|
-| `gamepulse/tactics.py` | Formations, roles, team instructions, presets |
-| `gamepulse/simulator/` | Seeded tactical simulator: player positions, pressing, passing, dribbles, shots, fatigue |
-| `gamepulse/scenario.py` | Scenario rules (red card, goal, injury, fatigue, tactic change), presets, validation |
-| `gamepulse/agents/interpreter.py` | AI interpreter: free-text roles and scenarios to validated parameters (LLM or keyword fallback) |
-| `gamepulse/lab.py` | Tactic Lab: headless batch simulation, aggregation, insights |
-| `gamepulse/engine/state.py` | Live stats, momentum, control-vs-chaos, key-moment detection |
-| `gamepulse/agents/pipeline.py` | Agents (Explainer, Narrator, Persona) and the orchestrator |
-| `gamepulse/agents/llm.py` | Azure OpenAI client with offline fallback |
-| `gamepulse/agents/tools.py`, `team.py`, `clients.py` | Agent Framework tools, Match Analyst / Tactics Coach / Router / Fact-checker, model clients |
-| `gamepulse/mcp_server.py` | MCP server exposing the engine, the Lab and the agents |
-| `gamepulse/api/server.py` | FastAPI + Server-Sent Events stream |
-| `gamepulse/overlay.py` | Timestamped overlay JSON export, see docs/OVERLAY.md |
-| `web/index.html` | Live dashboard (overlay cards, momentum bar, stats) |
-| `docs/SUBMISSION.md` | Pitch, tagline, description, video script for Innovation Studio |
-| `docs/TASKS.md` | Roadmap and work split |
+| `gamepulse/simulator/` | Tactical match simulator (positions, passing, pressing, shots, fatigue, scenarios, team levels) |
+| `gamepulse/engine/` | Live statistics, momentum, moment and insight detectors |
+| `gamepulse/agents/` | Agents (Agent Framework), tools, model clients, fact-checker, overlay chain, AI interpreter |
+| `gamepulse/feed/` | Event contract and feeds: simulator, Wyscout, Sportec |
+| `gamepulse/mcp_server.py` | MCP server |
+| `gamepulse/lab.py`, `strength.py`, `styles.py`, `spatial.py`, `calibration.py`, `validation.py` | Tactic Lab and the realism checks |
+| `web/` | Single-page app (4 languages) |
+| `tools/` | Data download, fine-tuning data, model evaluation, realism report, tuning |
+| `docs/` | `AGENTS.md`, `REALISM_FINDINGS.md`, `EVENT_CONTRACT.md`, `OVERLAY.md`, `DATA_SOURCES.md`, `CALIBRATION.md` |
 
-## Status
-Working end to end offline: simulator, engine, agents (template mode), API, dashboard, tests.
-See `docs/TASKS.md` for what's next.
+## Team
+Wael Akhdar and Jessim Ziani (EPITA).
