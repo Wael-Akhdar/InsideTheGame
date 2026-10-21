@@ -81,6 +81,7 @@
     <button data-tab="lab">Tactic Lab</button>
     <button data-tab="real">Realism</button>
   </nav>
+  <label class="f" style="margin-inline-start:auto">Language <select id="mLang"><option value="en">English</option><option value="fr">Français</option><option value="es">Español</option><option value="ar">العربية</option></select></label>
 </header>
 
 <!-- ====================================================== MATCH -->
@@ -92,7 +93,6 @@
     <label class="f">Away tactic <select id="mAway"></select></label>
     <label class="f">Away level <select id="mAwayLvl" class="lvl"></select></label>
     <label class="f">View <select id="mMode"><option value="casual">Casual fan</option><option value="analyst">Analyst</option></select></label>
-    <label class="f">Language <select id="mLang"><option value="en">English</option><option value="fr">Français</option><option value="es">Español</option><option value="ar">العربية</option></select></label>
     <label class="f">Scenario <select id="mScn"></select></label>
     <label class="f">Speed (live) <select id="mSpeed"><option value="10">x10</option><option value="30">x30</option><option value="60" selected>x60</option><option value="150">x150</option><option value="400">x400</option><option value="1000">x1000</option></select></label>
     <label class="f"><span id="mSeedLbl">Seed</span> <input type="text" id="mSeed" value="42" size="5"></label>
@@ -207,6 +207,7 @@
 
 <div id="tip"></div>
 
+<script src="/i18n.js"></script>
 <script>
 const $ = id => document.getElementById(id);
 const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
@@ -258,7 +259,15 @@ function renderOpps() {
 /* ---------------------------------------------------------------- scenarios */
 let mScn = null, lScn = null;  // scenarios described in free text
 function fillScenarioSelect(sel) {
-  sel.innerHTML = "<option value=''>No scenario (open match)</option>" + Object.keys(catalog.scenarios).map(n => `<option>${n}</option>`).join("") + "<option value='__custom'>Custom (described below)</option>";
+  const keep = sel.value, L = $("mLang").value;
+  sel.innerHTML = "<option value=''>No scenario (open match)</option>" + Object.entries(catalog.scenarios).map(([n, v]) => `<option value="${n.replace(/"/g, "&quot;")}">${(v.names && v.names[L]) || n}</option>`).join("") + "<option value='__custom'>Custom (described below)</option>";
+  sel.value = keep;
+}
+const presetExplain = v => (catalog.scenarios[v].explain_i18n || {})[$("mLang").value] || catalog.scenarios[v].explain;
+function aiResult(el, scn, items) {  // what the AI understood: its own sentence, the rules it produced, and who understood it
+  const badge = scn.source === "llm" ? '<span class="okb">understood by the Azure AI model</span>' : '<span class="offb">keywords only (AI model offline)</span>';
+  el.innerHTML = (scn.summary ? `<div class="ans notrans" style="margin:0 0 6px">${scn.summary.replace(/</g, "&lt;")}</div>` : "") +
+    items.map(x => `<span class="chip">${x}</span>`).join("") + " " + badge;
 }
 const chips = (el, list) => el.innerHTML = list.map(x => `<span class="chip">${x}</span>`).join("");
 function currentScenario(selId, custom) {
@@ -269,16 +278,16 @@ function currentScenario(selId, custom) {
 async function describeScenario(txtId, outId, selId) {
   const text = $(txtId).value.trim(); if (!text) return null;
   chips($(outId), ["Interpreting…"]);
-  const scn = await post("/api/ai/scenario", { text });
+  const scn = await post("/api/ai/scenario", { text, lang: $("mLang").value });
   $(selId).value = "__custom";
-  chips($(outId), scn.rules.length ? [...scn.explain, `(${scn.source === "llm" ? "understood by AI" : "keyword parser: connect Azure OpenAI for free-form text"})`]
-                                   : ["No event found in this sentence. Try: 'red card for the opponent at 55', 'we go 0-2 down'."]);
+  if (scn.rules.length) aiResult($(outId), scn, scn.explain);
+  else chips($(outId), ["No event found in this sentence. Try: 'red card for the opponent at 55', 'we go 0-2 down'."]);
   return scn;
 }
 $("mScnBtn").onclick = async () => { mScn = await describeScenario("mScnTxt", "mScnOut", "mScn"); };
 $("lScnBtn").onclick = async () => { lScn = await describeScenario("lScnTxt", "lScnOut", "lScn"); };
-$("mScn").onchange = () => { const v = $("mScn").value; chips($("mScnOut"), v === "__custom" ? (mScn ? mScn.explain : []) : v ? catalog.scenarios[v].explain : []); };
-$("lScn").onchange = () => { const v = $("lScn").value; chips($("lScnOut"), v === "__custom" ? (lScn ? lScn.explain : []) : v ? catalog.scenarios[v].explain : []); };
+$("mScn").onchange = () => { const v = $("mScn").value; if (v === "__custom" && mScn) aiResult($("mScnOut"), mScn, mScn.explain); else chips($("mScnOut"), v && v !== "__custom" ? presetExplain(v) : []); };
+$("lScn").onchange = () => { const v = $("lScn").value; if (v === "__custom" && lScn) aiResult($("lScnOut"), lScn, lScn.explain); else chips($("lScnOut"), v && v !== "__custom" ? presetExplain(v) : []); };
 
 /* ---------------------------------------------------------------- pitch drawing */
 function drawPitchLines(ctx, W, H) {
@@ -415,7 +424,7 @@ function updateHud(s, frame) {
   $("cPoss").textContent = `${s.possession[H]}% – ${s.possession[A]}%`;
   $("cXg").textContent = `${h.xg} – ${a.xg}`;
   $("cPress").textContent = `${s.pressure[H]} – ${s.pressure[A]}`;
-  $("cMom").textContent = (s.momentum > 0 ? "◀ home " : s.momentum < 0 ? "away ▶ " : "") + Math.abs(s.momentum);
+  $("cMom").textContent = (s.momentum > 0 ? "◀ " + T("Home") + " " : s.momentum < 0 ? T("Away") + " ▶ " : "") + Math.abs(s.momentum);
   const rows = [["Shots", h.shots, a.shots], ["On target", h.on_target, a.on_target], ["xG", h.xg, a.xg], ["Pass accuracy %", h.pass_acc, a.pass_acc],
                 ["Tackles won", h.tackles_won, a.tackles_won], ["Pressures", h.pressures, a.pressures], ["Fouls", h.fouls, a.fouls]];
   $("stats").innerHTML = rows.map(r => `<tr><td>${r[1]}</td><td class="k">${r[0]}</td><td>${r[2]}</td></tr>`).join("");
@@ -454,7 +463,7 @@ $("go").onclick = () => {
       : teams.source === "sportec"
       ? "Real match with player tracking (2 s steps), pseudonymised. Data: Bassek et al. 2025, Sportec Open DFL dataset, CC BY 4.0, released with the authorization of the DFL."
       : "○ pressure zone around the ball carrier · hover a player for details";
-    if (teams.source !== "sim") chips($("lcOut"), ["Live coaching and scenarios only apply to simulated matches."]);
+    if (teams.source !== "simulator") chips($("lcOut"), ["Live coaching and scenarios only apply to simulated matches."]);
   });
   es.addEventListener("end", () => { es.close(); es = null; });
   es.onmessage = e => {
@@ -468,7 +477,7 @@ $("go").onclick = () => {
     if (d.snapshot.minute !== (redrawCharts.last ?? -1) || d.events.some(x => x.type === "goal")) { redrawCharts.last = d.snapshot.minute; redrawCharts(); }
     for (const o of d.overlays) {
       const el = document.createElement("div"); el.className = "overlay " + o.kind;
-      el.innerHTML = `<h4>${o.at_minute}' ${o.headline}</h4><p>${o.body}</p><p class="why">Why it matters: ${o.explanation}</p>`;
+      el.innerHTML = `<h4>${o.at_minute}' ${o.headline}</h4><p>${o.body}</p><p class="why">${T("Why it matters:")} ${o.explanation}</p>`;
       $("overlays").prepend(el); $("ovn").textContent = ++ovCount;
     }
   };
@@ -490,7 +499,7 @@ function buildLiveCoach() {
 }
 async function applyLive(spec, label) {
   const side = $("lcTeam").value, r = await control({ tactic: { team: side, spec } });
-  chips($("lcOut"), [r ? `${side === "home" ? "Home" : "Away"}: ${label} (applies at ${curMinute}')` : "No running match."]);
+  chips($("lcOut"), [r ? `${T(side === "home" ? "Home" : "Away")}: ${label} (${curMinute}')` : "No running match."]);
 }
 $("lcTeam").onchange = buildLiveCoach;
 $("lcForm").onchange = () => { liveTac[$("lcTeam").value].formation = $("lcForm").value; applyLive({ formation: $("lcForm").value }, `formation → ${$("lcForm").value}`); };
@@ -501,9 +510,10 @@ $("lcApply").onclick = () => {
 };
 $("lcScnBtn").onclick = async () => {
   const text = $("lcScn").value.trim(); if (!text) return;
-  const r = await control({ scenario_text: text, minute: curMinute });
+  const r = await control({ scenario_text: text, minute: curMinute, lang: $("mLang").value });
   if (!r) return chips($("lcOut"), ["No running match."]);
-  chips($("lcOut"), r.scenario.rules.length ? r.scenario.explain.map(x => x.replace(/^\d+'/, "now")) : ["I couldn't find an event in this sentence."]);
+  if (r.scenario.rules.length) aiResult($("lcOut"), r.scenario, r.scenario.explain);
+  else chips($("lcOut"), ["I couldn't find an event in this sentence."]);
   $("lcScn").value = "";
 };
 
@@ -523,13 +533,13 @@ function renderEd() {
       (custom ? `<option value="${key}" selected>✎ ${ed.custom_roles[key].label}</option>` : "");
     return `<div class="slot ${custom ? "cu" : ""}"><b>${s.slot}</b><select data-i="${i}">${opts}</select>
       <div class="ai"><input type="text" data-d="${i}" placeholder="or describe what he does…" value="${custom ? (ed.custom_roles[key].text || "").replace(/"/g, "&quot;") : ""}"><button class="ghost" data-a="${i}">AI</button></div>
-      ${custom ? `<small>${ed.custom_roles[key].summary || ""}</small>` : ""}</div>`;
+      ${custom ? `<small class="notrans">${ed.custom_roles[key].summary || ""}</small> ${ed.custom_roles[key].source === "llm" ? '<span class="okb">understood by the Azure AI model</span>' : '<span class="offb">keywords only (AI model offline)</span>'}` : ""}</div>`;
   }).join("");
   $("slots").querySelectorAll("select").forEach(s => s.onchange = () => { ed.roles[+s.dataset.i] = s.value; renderEd(); });
   $("slots").querySelectorAll("button[data-a]").forEach(b => b.onclick = async () => {
     const i = +b.dataset.a, text = $("slots").querySelector(`input[data-d="${i}"]`).value.trim(); if (!text) return;
     b.textContent = "…";
-    const role = await post("/api/ai/role", { text, line: slots[i].line });
+    const role = await post("/api/ai/role", { text, line: slots[i].line, lang: $("mLang").value });
     const key = "c" + i; ed.custom_roles[key] = role; ed.roles[i] = key; renderEd();
   });
   $("sliders").innerHTML = SLIDERS.map(([k, l, a, b]) =>
@@ -588,7 +598,7 @@ $("lRun").onclick = async () => {
   btn.disabled = true; btn.textContent = "Simulating…";
   const total = opps.length * $("lN").value * (compare ? 2 : 1);
   $("lOut").innerHTML = `<div class="card" style="color:var(--mute)">Simulating ${total} matches…</div>`;
-  const body = { tactic: all[name], opponents: opps.map(o => all[o]), n: +$("lN").value, scenario: scn,
+  const body = { tactic: all[name], opponents: opps.map(o => all[o]), n: +$("lN").value, scenario: scn, lang: $("mLang").value,
                  level: $("lLvl").value, opponent_level: $("lOppLvl").value };
   try {
     if (compare) renderWhatIf(await post("/api/lab/whatif", body));
@@ -707,9 +717,22 @@ $("aQ").onkeydown = e => { if (e.key === "Enter") $("aBtn").click(); };
 $("cBtn").onclick = () => askAgents("cQ", "cOut", () => ({ tactic: selVal($("lTactic")), level: $("lLvl").value, opponent_level: $("lOppLvl").value }));
 $("cQ").onkeydown = e => { if (e.key === "Enter") $("cBtn").click(); };
 
+/* ---------------------------------------------------------------- language: whole interface, live insights, AI answers */
+$("mLang").onchange = () => {
+  const L = $("mLang").value;
+  try { localStorage.setItem("gp_lang", L); } catch (e) {}
+  setUiLang(L);
+  control({ lang: L });  // the running match switches language from its next insight
+  if (catalog) { fillScenarioSelect($("mScn")); fillScenarioSelect($("lScn")); $("mScn").onchange(); $("lScn").onchange(); }
+  if (realism && $("tab-real").classList.contains("on")) renderRealism();
+};
+$("mMode").onchange = () => control({ mode: $("mMode").value });
+try { const L = new URLSearchParams(location.search).get("lang") || localStorage.getItem("gp_lang"); if (L) $("mLang").value = L; } catch (e) {}
+
 /* ---------------------------------------------------------------- boot */
 fetch("/api/catalog").then(r => r.json()).then(c => {
   catalog = c; refreshSelectors();
+  setUiLang($("mLang").value);
   document.querySelectorAll("select.lvl").forEach(sel => sel.innerHTML = Object.entries(c.levels)
     .map(([k, v]) => `<option value="${k}" ${k === "mid" ? "selected" : ""}>${v.label}</option>`).join(""));
   fillScenarioSelect($("mScn")); fillScenarioSelect($("lScn"));
