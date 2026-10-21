@@ -35,8 +35,12 @@ _mcp_app = mcp_server.streamable_http_app(streamable_http_path="/", stateless_ht
 
 @contextlib.asynccontextmanager
 async def _lifespan(_app):
+    from ..agents.keepalive import keep_alive_loop
+
+    task = asyncio.create_task(keep_alive_loop())  # recreates the fine-tuned model deployment when it expires (Azure only)
     async with mcp_server.session_manager.run():
         yield
+    task.cancel()
 
 
 app = FastAPI(title="GamePulse", lifespan=_lifespan)
@@ -59,6 +63,15 @@ def _spec(raw: Optional[str], default: str) -> Any:
 @app.get("/")
 def index():
     return FileResponse(WEB / "index.html")
+
+
+@app.get("/api/health")
+def health():
+    """Which model answers and whether the model keep-alive runs (no secrets)."""
+    from ..agents.clients import backend
+    from ..agents.keepalive import STATE
+
+    return {"ok": True, "model_backend": backend(), "keepalive": STATE}
 
 
 @app.get("/i18n.js")
