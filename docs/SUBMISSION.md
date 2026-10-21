@@ -1,63 +1,107 @@
 # GamePulse: texts for the Innovation Studio project page
 
-> Everything the platform asks for must be in **English**. Edit freely, and keep the tech list honest:
-> only list services you actually use in the final repo.
+> The platform asks for everything in **English** (rules 4.9). Paste the sections below into the matching fields.
+> Keep the technology list honest: every item is used in the final repo.
+
+## Links
+| Field | Value |
+|---|---|
+| Live demo (free, no login, available until judging ends) | https://gamepulse.lemonbay-43a4c2ef.polandcentral.azurecontainerapps.io |
+| GitHub repository (public) | https://github.com/Wael-Akhdar/InsideTheGame |
+| Demo video (YouTube, < 2 min) | *add the link after upload* |
+| Team | Wael Akhdar, Jessim Ziani (EPITA) |
 
 ## Project name
 **GamePulse**
 
-## Tagline (pick one)
-1. *Feel the match, understand the moment.* (recommended)
-2. *Every pass has a story. GamePulse tells it.*
-3. *Explainable match intelligence, made for every fan.*
+## Tagline
+*Feel the match, understand the moment.*
 
-## Short description (one line, ~150 chars)
-A multi-agent AI engine that turns live football events into explained key moments, real-time narratives and recaps, personalized per fan, in any language.
+## Short description (one line)
+Multi-agent AI on Microsoft Foundry that turns synthetic football events into explained, multilingual match intelligence, plus a tactical lab coaches can trust.
 
-## Elevator pitch (paste into the submission)
-Football stories don't end with the scoreline. **GamePulse** is a multi-agent AI engine on Azure that ingests live football events (passes, shots, tackles, pressure), detects the moments that matter and, above all, **explains why they matter**: a 0.31 xG chance, a momentum swing after a pressing change, a red card that reshapes the game.
+## Elevator pitch
+Football stories don't end with the scoreline. TV shows the goal, not why it happened, what is changing, or what a coach should do next.
 
-Five specialized agents (Stats, Moment Detector, Explainer, Narrator, Persona) collaborate through shared match state. Every insight is grounded in cited event IDs, so nothing is hallucinated. The output is timestamped, machine-readable overlay JSON ready for a broadcast renderer, and it is personalized: an analyst sees xG, pass difficulty and control-vs-chaos; a casual fan gets punchy commentary. Viewers pick their language, favorite club, or follow a single player through the whole match.
+**GamePulse** ingests a live stream of synthetic, football-realistic match events and turns it into explainable match intelligence. It computes
+possession, expected goals, pressing and momentum, detects the moments that matter (a team dominant but not rewarded, a pressing that fades,
+a turning point after a tactical change) and **explains why each one matters, citing the events behind it**. Every insight is rendered on screen
+and exported as timestamped overlay JSON for broadcast graphics, and it is personalized: casual or analyst view, favourite team, follow a player,
+and four languages (English, French, Spanish, Arabic) that can be switched mid-match.
 
-To make this testable without real data, we built a seeded **synthetic match simulator** with tactical styles, pressing, fatigue-like dynamics and scenarios (comeback, red card), producing football-realistic event streams (~28 shots and ~3 goals per match on average).
+Viewers and coaches can **ask questions**. Agents built with the **Microsoft Agent Framework** answer by calling the engine's tools (match
+snapshot, key moments, player reports, tactic simulations), and a **fact-checker rejects any number that is not in the tool results**. The model is
+a **gpt-4.1-mini fine-tuned in Microsoft Foundry** into a grounded football commentator: on matches it never saw, 40/40 sentences grounded and in
+the right language, 6/6 agent answers grounded.
 
-**Problem solved:** broadcasters and streamers have rich event data but little scalable, explainable, personalized storytelling. GamePulse produces it live, in many languages, for every audience segment at once.
+For coaches, the **Tactic Lab** runs many simulated matches of a tactic against every style, at their level and the opponent's, with what-if
+scenarios ("red card at 30'", "we switch to 5-4-1 at 70' if we lead") described in plain words. It is useful because the simulator is
+**validated against real football**: 8/8 match totals within tolerance of 1,446 real league matches, 14/16 pitch checks, 13 m placement error
+against real tracking data. The known gaps are shown in the app, not hidden.
 
-## Full description (long form)
-### What it does
-1. **Ingest**: live stream of synthetic match events (SSE).
-2. **Interpret**: rolling-window momentum, xG, pass difficulty rating, ball and shot speed, control vs chaos.
-3. **Explain**: each key moment comes with a reason and evidence event IDs.
-4. **Render**: overlay cards (JSON) plus a live web dashboard.
-5. **Personalize**: casual vs analyst mode, language (EN/FR/ES), favorite team, follow-a-player mode.
+Everything is also exposed as an **MCP server**, and the app runs on **Azure Container Apps**, built by GitHub Actions.
 
-### Agents
-| Agent | Role |
+**Problem solved:** broadcasters and clubs have rich event data but little scalable, explainable and personalized storytelling, and coaches
+have no cheap way to test a plan before the match. GamePulse does both from the same engine, and every number it shows can be traced back to it.
+
+## How it answers the challenge (rules 4.1)
+| Challenge stage | GamePulse |
 |---|---|
-| Stats | Aggregates events into team and player stats, momentum, rhythm |
-| Moment Detector | Finds goals, big chances, momentum swings, red cards |
-| Explainer | Explains *why* the moment matters, with evidence |
-| Narrator | Writes broadcast-ready copy in the viewer's language and mode |
-| Persona | Re-ranks and filters moments per viewer |
+| Ingest | Event contract fed by the synthetic match simulator (or a real public match, pseudonymised), streamed live (SSE) |
+| Interpret | Live stats, xG, pass difficulty, pressing (PPDA), momentum, per-player reports |
+| Explain | Moment detectors + Explainer: each insight says why it matters and cites its evidence event IDs; fact-checked |
+| Render | Live dashboard and timestamped overlay JSON (`/api/overlay`, schema in `docs/OVERLAY.md`) |
+| Personalize | Casual / analyst view, favourite team, follow a player, 4 languages incl. right-to-left Arabic, switchable mid-match |
+| Narrative generation, multi-language storytelling | Fine-tuned narrator and agents writing in the viewer's language |
+| Data innovation | Tactical match simulator calibrated and validated against public real data (Realism tab) |
 
-### Microsoft / Azure technologies (update as you build)
-- **Microsoft Foundry** / Azure OpenAI: narration, translation (planned for the deployed version)
-- **Microsoft Agent Framework**: agent orchestration (planned, currently plain-Python orchestrator)
-- **Azure Container Apps**: hosting the API and the dashboard (planned)
-- **GitHub + GitHub Copilot**: development workflow
-- *Optional stretch:* Azure Speech (spoken recaps), Azure Cosmos DB / Fabric (match storage and analytics), Azure MCP
+## Microsoft and Azure technologies
+| Technology | Use |
+|---|---|
+| **Microsoft Agent Framework** | Match Analyst and Tactics Coach agents with function tools, a router, and a fact-checker on every answer |
+| **Microsoft Foundry / Azure OpenAI** | gpt-4.1-mini fine-tuned into the GamePulse commentator (4 languages, grounded), DefaultV2 guardrails |
+| **MCP** | Engine, Tactic Lab and agents as MCP tools (`python -m gamepulse.mcp_server`, or `/mcp/` on the live app) |
+| **Azure Container Apps** | Hosts the live demo; a service principal keeps the fine-tuned deployment alive |
+| **GitHub Actions + GitHub Container Registry** | Every push to `main` builds and publishes the container image |
 
-### Categories we target
-Grand Prize, Best Use of Microsoft Foundry, Best Multi-Agent System, Best Azure Cloud Native Integration (one Grand Prize plus one Category Prize per entrant maximum).
+## Categories
+Grand Prize, plus the category prizes that fit best: **Best Multi-Agent System**, **Best Use of Microsoft Foundry Project**,
+**Best Azure Cloud Native Integration**.
 
-## Demo video script (< 2 min, public on YouTube)
+## Testing instructions (for judges)
+1. Open the live demo (no login). The first load can take a few seconds.
+2. **Live match** tab: press *Kick off*. Switch the language in the header while it plays. Ask the match analyst a question, e.g.
+   "Who is on top, and what were the key moments?". The tool trace and the fact-check badge appear under the answer.
+3. While the match plays, type a situation in *Live coaching*, e.g. "The opponent gets a red card, and we go all out attack".
+4. **Tactic Lab** tab: choose a tactic, your level and the opponent's, press *Run simulations*. Then ask the tactics coach, e.g.
+   "How do we do against a Low block 5-3-2 of a title contender?".
+5. **Realism** tab: how the simulator compares with real football.
+6. Shortcuts: `#demo`, `#lab`, `#coach`, `#analyst`, `#realism` at the end of the URL. `/api/overlay` returns the overlay JSON.
+
+If the fine-tuned model is unavailable, the agents answer with the offline planner (same tools, same fact-checker), and the answer is labelled so.
+Locally: see *Run it* in the README (runs fully offline without Azure credentials; 40 tests).
+
+## Data
+The challenge data is synthetic: matches are generated by our simulator, with fictional clubs and players. Public real data is used only to
+calibrate and validate the simulator, and is pseudonymised when shown: Wyscout public dataset (Pappalardo et al. 2019, CC BY 4.0) and Sportec
+Open DFL dataset (Bassek et al. 2025, CC BY 4.0). The organizers confirmed by email (2026-10-13) that open datasets may be used. Raw data is
+never committed. No third-party logos or copyrighted music.
+
+## Demo video (as recorded, 1:53)
+Recorded on the real app with the fine-tuned model (`video/record.py`, `video/voice.py`, `video/build.py`). Voice-over: Microsoft neural
+voice (Andrew).
+
 | Time | Shot |
 |---|---|
-| 0:00-0:10 | Hook: "A goal is just a number. Why did it matter?" |
-| 0:10-0:30 | Architecture in one diagram: events, 5 agents, overlays |
-| 0:30-1:00 | Live dashboard in analyst mode: momentum bar, xG, explanation card with evidence |
-| 1:00-1:20 | Switch to casual fan plus French, same moment told differently |
-| 1:20-1:40 | "Follow a player" mode and the red card scenario |
-| 1:40-2:00 | Azure deployment and the pitch: why it's production-ready |
-
-No third-party logos or copyrighted music in the video.
+| 0:00 | Title: GamePulse, feel the match, understand the moment |
+| 0:04 | The problem: the goal is obvious on TV, why it happened is not |
+| 0:12 | Live match: events streamed, stats, momentum, detected moments |
+| 0:26 | Insights explained with their evidence, exported as overlay JSON |
+| 0:36 | Language switched to French mid-match |
+| 0:45 | Ask the match analyst: tool calls and fact-check |
+| 1:00 | Live coaching in plain words |
+| 1:09 | Tactic Lab: title contender vs mid-table |
+| 1:17 | Ask the tactics coach: it runs the simulations |
+| 1:30 | Realism: validated against real matches and tracking data |
+| 1:42 | Built on Microsoft: Agent Framework, Foundry, MCP, Container Apps |
+| 1:51 | End card: live demo link, repository, team |
