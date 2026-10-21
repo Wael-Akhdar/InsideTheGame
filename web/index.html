@@ -732,6 +732,10 @@ try { const L = new URLSearchParams(location.search).get("lang") || localStorage
 /* ---------------------------------------------------------------- boot */
 fetch("/api/catalog").then(r => r.json()).then(c => {
   catalog = c; refreshSelectors();
+  [...$("mSource").options].forEach(o => {  // real-data sources this server does not hold are shown but disabled
+    const ok = o.value === "sim" || (o.value === "sportec" ? c.sources.sportec : c.sources.wyscout);
+    o.disabled = !ok; if (!ok) o.textContent += " — n/a";
+  });
   setUiLang($("mLang").value);
   document.querySelectorAll("select.lvl").forEach(sel => sel.innerHTML = Object.entries(c.levels)
     .map(([k, v]) => `<option value="${k}" ${k === "mid" ? "selected" : ""}>${v.label}</option>`).join(""));

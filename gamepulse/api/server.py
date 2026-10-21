@@ -79,6 +79,9 @@ def realism():
 def catalog():
     cat = describe_catalog()
     cat["levels"] = {k: {"strength": v[0], "label": v[1]} for k, v in LEVELS.items()}
+    from ..feed.sportec import available_matches
+    from ..feed.wyscout import DATA as WYSCOUT
+    cat["sources"] = {"sportec": bool(available_matches()), "wyscout": (WYSCOUT / "matches.zip").exists()}  # real data present here
     cat["scenarios"] = {k: {**v, "explain": [describe_rule(r) for r in v["rules"]],
                             "explain_i18n": {lg: [describe_rule(r, lg) for r in v["rules"]] for lg in LANGS},
                             "names": {"en": k, **SCENARIO_NAMES.get(k, {})}} for k, v in PRESET_SCENARIOS.items()}

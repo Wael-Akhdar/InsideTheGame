@@ -42,6 +42,7 @@ const I18N = {
   "or describe what he does…": ["ou décris ce qu'il fait…", "o describe lo que hace…", "أو صِف ما يفعله…"],
   "Why it matters:": ["Pourquoi c'est important :", "Por qué importa:", "لماذا يهم:"],
   "now": ["maintenant", "ahora", "الآن"],
+  "{0} — n/a": ["{0} — indisponible ici", "{0} — no disponible aquí", "{0} — غير متاح هنا"],
   "No scenario (open match)": ["Aucun scénario (match ouvert)", "Sin escenario (partido abierto)", "بدون سيناريو (مباراة مفتوحة)"],
   "✎ My own scenario (described above)": ["✎ Mon propre scénario (décrit ci-dessus)", "✎ Mi propio escenario (descrito arriba)", "✎ السيناريو الخاص بي (الموصوف أعلاه)"],
   // pitch, coaching
