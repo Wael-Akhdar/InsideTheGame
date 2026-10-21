@@ -1,0 +1,26 @@
+<!doctype html><html><head><meta charset="utf-8"><style>
+:root{--bg:#12001f;--accent:#00ff85;--pink:#e90052;--text:#f4f0f8;--mute:#a99ab8;--panel:#1b0730;--line:#3b1a57}
+*{box-sizing:border-box}body{margin:0;height:100vh;background:radial-gradient(circle at 20% 20%,#2a0a4a,var(--bg) 60%);color:var(--text);font-family:system-ui,-apple-system,Segoe UI,sans-serif;display:flex;align-items:center;justify-content:center}
+.c{display:none;text-align:center;max-width:1300px;padding:40px;animation:in .7s ease both}.c.on{display:block}
+@keyframes in{from{opacity:0;transform:translateY(18px)}to{opacity:1;transform:none}}
+h1{font-size:110px;margin:0;letter-spacing:1px}h1 span{color:var(--accent)}
+.tag{font-size:40px;color:var(--mute);margin-top:10px}.sub{font-size:28px;margin-top:40px;color:var(--text)}
+.big{font-size:56px;line-height:1.35;font-weight:700}.big em{color:var(--accent);font-style:normal}.big b{color:var(--pink)}
+.grid{display:grid;grid-template-columns:repeat(2,1fr);gap:22px;margin-top:34px;text-align:left}
+.box{background:var(--panel);border:1px solid var(--line);border-radius:16px;padding:22px 26px;font-size:24px;color:var(--mute)}
+.box b{display:block;color:var(--text);font-size:30px;margin-bottom:6px}.box b i{color:var(--accent);font-style:normal}
+.kpi{display:flex;gap:60px;justify-content:center;margin-top:40px}.kpi div b{display:block;font-size:72px;color:var(--accent)}.kpi div{font-size:22px;color:var(--mute)}
+.url{font-size:34px;color:var(--accent);margin-top:28px}.small{font-size:24px;color:var(--mute);margin-top:18px}
+</style></head><body>
+<div class="c" id="title"><h1>Game<span>Pulse</span></h1><div class="tag">Feel the match, understand the moment.</div>
+<div class="sub">AI match intelligence and a tactical lab for football</div></div>
+<div class="c" id="problem"><div class="big">A goal is obvious on TV.<br><em>Why</em> it happened, <em>what is changing</em>,<br>and <b>what a coach should do</b>… is not.</div></div>
+<div class="c" id="arch"><div class="big" style="font-size:46px">Built on Microsoft</div><div class="grid">
+<div class="box"><b><i>Microsoft Agent Framework</i></b>Match Analyst and Tactics Coach agents call the engine as tools; a router picks the agent.</div>
+<div class="box"><b><i>Microsoft Foundry</i></b>gpt-4.1-mini fine-tuned into a grounded commentator in 4 languages, DefaultV2 guardrails.</div>
+<div class="box"><b><i>MCP</i></b>Simulations, what-if, real-match analysis and the coach, open to any MCP client (Copilot, Foundry agents).</div>
+<div class="box"><b><i>Azure Container Apps</i></b>Live demo, built by GitHub Actions; the app keeps its model deployed by itself.</div></div>
+<div class="kpi"><div><b>40/40</b>sentences fact-checked<br>in 4 languages</div><div><b>8/8</b>match totals match<br>1,446 real matches</div><div><b>13 m</b>player placement error<br>vs real tracking</div></div></div>
+<div class="c" id="end"><h1>Game<span>Pulse</span></h1><div class="url">gamepulse.lemonbay-43a4c2ef.polandcentral.azurecontainerapps.io</div>
+<div class="small">github.com/Wael-Akhdar/InsideTheGame</div><div class="small">Wael Akhdar · Jessim Ziani — Inside the Game: Developer Hackathon</div></div>
+<script>const id=location.hash.slice(1)||"title";document.getElementById(id).classList.add("on")</script></body></html>
