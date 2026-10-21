@@ -1,0 +1,479 @@
+{
+ "backend": "azure-openai",
+ "commentator": [
+  {
+   "kind": "key_player",
+   "lang": "fr",
+   "mode": "casual",
+   "grounded": true,
+   "lang_ok": true,
+   "seconds": 1.52,
+   "text": "Tout ce que fait Northgate United passe par Dani Ortega en ce moment.",
+   "unsupported": []
+  },
+  {
+   "kind": "momentum_swing",
+   "lang": "es",
+   "mode": "casual",
+   "grounded": true,
+   "lang_ok": true,
+   "seconds": 0.99,
+   "text": "Northgate United se ha hecho con el control del partido.",
+   "unsupported": []
+  },
+  {
+   "kind": "momentum_swing",
+   "lang": "ar",
+   "mode": "analyst",
+   "grounded": true,
+   "lang_ok": true,
+   "seconds": 1.18,
+   "text": "Northgate United يفرض إيقاعه: مؤشر الزخم انتقل من +30 إلى -37 خلال دقائق.",
+   "unsupported": []
+  },
+  {
+   "kind": "momentum_swing",
+   "lang": "ar",
+   "mode": "analyst",
+   "grounded": true,
+   "lang_ok": true,
+   "seconds": 1.09,
+   "text": "Riverside FC يفرض إيقاعه: مؤشر الزخم انتقل من -11 إلى +47 خلال دقائق.",
+   "unsupported": []
+  },
+  {
+   "kind": "momentum_swing",
+   "lang": "fr",
+   "mode": "casual",
+   "grounded": true,
+   "lang_ok": true,
+   "seconds": 0.99,
+   "text": "Northgate United a pris le contrôle du match.",
+   "unsupported": []
+  },
+  {
+   "kind": "momentum_swing",
+   "lang": "ar",
+   "mode": "casual",
+   "grounded": true,
+   "lang_ok": true,
+   "seconds": 0.96,
+   "text": "Riverside FC يفرض أجواءه الآن.",
+   "unsupported": []
+  },
+  {
+   "kind": "goal",
+   "lang": "ar",
+   "mode": "analyst",
+   "grounded": true,
+   "lang_ok": true,
+   "seconds": 1.19,
+   "text": "Callum Frost يحول فرصة بقيمة 0.14 xG إلى هدف لـRiverside FC، والهدف يمنحهم التقدم: Riverside FC 1-0 Northgate United.",
+   "unsupported": []
+  },
+  {
+   "kind": "momentum_swing",
+   "lang": "en",
+   "mode": "analyst",
+   "grounded": true,
+   "lang_ok": true,
+   "seconds": 0.8,
+   "text": "Momentum swung from +10 to -48: Northgate United now dominate territory and pressure.",
+   "unsupported": []
+  },
+  {
+   "kind": "momentum_swing",
+   "lang": "es",
+   "mode": "casual",
+   "grounded": true,
+   "lang_ok": true,
+   "seconds": 0.93,
+   "text": "El impulso ahora es de Riverside FC.",
+   "unsupported": []
+  },
+  {
+   "kind": "big_chance",
+   "lang": "en",
+   "mode": "analyst",
+   "grounded": true,
+   "lang_ok": true,
+   "seconds": 0.59,
+   "text": "Rafa Duarte had a 0.41 xG chance and missed.",
+   "unsupported": []
+  },
+  {
+   "kind": "momentum_swing",
+   "lang": "en",
+   "mode": "casual",
+   "grounded": true,
+   "lang_ok": true,
+   "seconds": 0.93,
+   "text": "The momentum is with Riverside FC now.",
+   "unsupported": []
+  },
+  {
+   "kind": "goal",
+   "lang": "en",
+   "mode": "casual",
+   "grounded": true,
+   "lang_ok": true,
+   "seconds": 1.07,
+   "text": "Goal! Eli Novak scores for Riverside FC and they take the lead: Riverside FC 1-0 Northgate United.",
+   "unsupported": []
+  },
+  {
+   "kind": "momentum_swing",
+   "lang": "ar",
+   "mode": "casual",
+   "grounded": true,
+   "lang_ok": true,
+   "seconds": 1.0,
+   "text": "Riverside FC يسيطر الآن على المباراة.",
+   "unsupported": []
+  },
+  {
+   "kind": "goal",
+   "lang": "ar",
+   "mode": "casual",
+   "grounded": true,
+   "lang_ok": true,
+   "seconds": 1.0,
+   "text": "هدف! Ravi Menon يسجل لـNorthgate United والهدف يعادل المباراة: Riverside FC 1-1 Northgate United.",
+   "unsupported": []
+  },
+  {
+   "kind": "unlucky",
+   "lang": "fr",
+   "mode": "analyst",
+   "grounded": true,
+   "lang_ok": true,
+   "seconds": 1.15,
+   "text": "Riverside FC domine aux expected goals : 1.1 contre 0.2, mais Riverside FC 1-1 Northgate United au score.",
+   "unsupported": []
+  },
+  {
+   "kind": "goal",
+   "lang": "ar",
+   "mode": "casual",
+   "grounded": true,
+   "lang_ok": true,
+   "seconds": 0.74,
+   "text": "Ravi Menon يهز الشباك لـNorthgate United، والهدف يمنحهم التقدم: Riverside FC 1-2 Northgate United.",
+   "unsupported": []
+  },
+  {
+   "kind": "momentum_swing",
+   "lang": "es",
+   "mode": "casual",
+   "grounded": true,
+   "lang_ok": true,
+   "seconds": 0.91,
+   "text": "El impulso ahora es de Riverside FC.",
+   "unsupported": []
+  },
+  {
+   "kind": "key_player",
+   "lang": "fr",
+   "mode": "analyst",
+   "grounded": true,
+   "lang_ok": true,
+   "seconds": 1.0,
+   "text": "Callum Frost capte 25 % des ballons de Riverside FC (9 % pour un joueur type) : le bloquer est le meilleur moyen de les gêner.",
+   "unsupported": []
+  },
+  {
+   "kind": "goal",
+   "lang": "es",
+   "mode": "casual",
+   "grounded": true,
+   "lang_ok": true,
+   "seconds": 1.06,
+   "text": "¡Gooooool de Idris Okoye para Riverside FC! Este tanto iguala el partido: Riverside FC 2-2 Northgate United.",
+   "unsupported": []
+  },
+  {
+   "kind": "momentum_swing",
+   "lang": "ar",
+   "mode": "casual",
+   "grounded": true,
+   "lang_ok": true,
+   "seconds": 1.0,
+   "text": "Riverside FC يسيطر الآن على المباراة.",
+   "unsupported": []
+  },
+  {
+   "kind": "unlucky",
+   "lang": "fr",
+   "mode": "analyst",
+   "grounded": true,
+   "lang_ok": true,
+   "seconds": 0.82,
+   "text": "Riverside FC domine aux expected goals, 1.3 contre 0.3, mais le score est de 2-2.",
+   "unsupported": []
+  },
+  {
+   "kind": "big_chance",
+   "lang": "en",
+   "mode": "analyst",
+   "grounded": true,
+   "lang_ok": true,
+   "seconds": 1.12,
+   "text": "Sami Haddad had a 0.41 xG chance and it was blocked.",
+   "unsupported": []
+  },
+  {
+   "kind": "momentum_swing",
+   "lang": "ar",
+   "mode": "casual",
+   "grounded": true,
+   "lang_ok": true,
+   "seconds": 0.96,
+   "text": "Northgate United يفرض إيقاعه الآن.",
+   "unsupported": []
+  },
+  {
+   "kind": "big_chance",
+   "lang": "es",
+   "mode": "analyst",
+   "grounded": true,
+   "lang_ok": true,
+   "seconds": 0.97,
+   "text": "Sami Haddad tuvo una ocasión de 0.26 xG y la mandó fuera.",
+   "unsupported": []
+  },
+  {
+   "kind": "momentum_swing",
+   "lang": "ar",
+   "mode": "analyst",
+   "grounded": true,
+   "lang_ok": true,
+   "seconds": 4.05,
+   "text": "Riverside FC يفرض إيقاعه: مؤشر الزخم انتقل من -66 إلى +46 خلال دقائق.",
+   "unsupported": []
+  },
+  {
+   "kind": "goal",
+   "lang": "en",
+   "mode": "analyst",
+   "grounded": true,
+   "lang_ok": true,
+   "seconds": 1.14,
+   "text": "Eli Novak finishes a 0.15 xG chance and puts them ahead for Riverside FC: Riverside FC 1-0 Northgate United.",
+   "unsupported": []
+  },
+  {
+   "kind": "momentum_swing",
+   "lang": "fr",
+   "mode": "analyst",
+   "grounded": true,
+   "lang_ok": true,
+   "seconds": 1.09,
+   "text": "Riverside FC prend le dessus : l'indice de dynamique est passé de -2 à +55 en quelques minutes.",
+   "unsupported": []
+  },
+  {
+   "kind": "momentum_swing",
+   "lang": "ar",
+   "mode": "casual",
+   "grounded": true,
+   "lang_ok": true,
+   "seconds": 0.63,
+   "text": "Riverside FC يسيطر الآن على المباراة.",
+   "unsupported": []
+  },
+  {
+   "kind": "goal",
+   "lang": "es",
+   "mode": "analyst",
+   "grounded": true,
+   "lang_ok": true,
+   "seconds": 1.3,
+   "text": "Leo Brandt transforma una ocasión de 0.20 xG y amplía la ventaja para Riverside FC: Riverside FC 2-0 Northgate United.",
+   "unsupported": []
+  },
+  {
+   "kind": "momentum_swing",
+   "lang": "en",
+   "mode": "analyst",
+   "grounded": true,
+   "lang_ok": true,
+   "seconds": 1.06,
+   "text": "Momentum swung from +25 to -31: Northgate United now dominate territory and pressure.",
+   "unsupported": []
+  },
+  {
+   "kind": "goal",
+   "lang": "en",
+   "mode": "casual",
+   "grounded": true,
+   "lang_ok": true,
+   "seconds": 1.14,
+   "text": "Cole Whitaker scores for Northgate United! The goal puts them ahead: Riverside FC 0-1 Northgate United.",
+   "unsupported": []
+  },
+  {
+   "kind": "goal",
+   "lang": "ar",
+   "mode": "analyst",
+   "grounded": true,
+   "lang_ok": true,
+   "seconds": 0.83,
+   "text": "Rafa Duarte يحول فرصة بقيمة 0.23 xG إلى هدف لـRiverside FC، والهدف يساوي: Riverside FC 1-1 Northgate United.",
+   "unsupported": []
+  },
+  {
+   "kind": "goal",
+   "lang": "ar",
+   "mode": "casual",
+   "grounded": true,
+   "lang_ok": true,
+   "seconds": 1.14,
+   "text": "Ravi Menon يهز الشباك لـNorthgate United، والهدف يمنحهم التقدم: Riverside FC 1-2 Northgate United.",
+   "unsupported": []
+  },
+  {
+   "kind": "momentum_swing",
+   "lang": "ar",
+   "mode": "casual",
+   "grounded": true,
+   "lang_ok": true,
+   "seconds": 0.59,
+   "text": "Northgate United يسيطر الآن على المباراة.",
+   "unsupported": []
+  },
+  {
+   "kind": "goal",
+   "lang": "es",
+   "mode": "analyst",
+   "grounded": true,
+   "lang_ok": true,
+   "seconds": 0.8,
+   "text": "Riverside FC marca con Rafa Duarte (0.07 xG); el gol iguala el partido, Riverside FC 2-2 Northgate United.",
+   "unsupported": []
+  },
+  {
+   "kind": "big_chance",
+   "lang": "fr",
+   "mode": "casual",
+   "grounded": true,
+   "lang_ok": true,
+   "seconds": 1.11,
+   "text": "Sami Haddad aurait dû marquer, mais sa frappe est contrée.",
+   "unsupported": []
+  },
+  {
+   "kind": "momentum_swing",
+   "lang": "fr",
+   "mode": "casual",
+   "grounded": true,
+   "lang_ok": true,
+   "seconds": 0.6,
+   "text": "Riverside FC a pris le dessus.",
+   "unsupported": []
+  },
+  {
+   "kind": "unlucky",
+   "lang": "fr",
+   "mode": "casual",
+   "grounded": true,
+   "lang_ok": true,
+   "seconds": 0.95,
+   "text": "Ils mériteraient mieux que ce score, Riverside FC.",
+   "unsupported": []
+  },
+  {
+   "kind": "key_player",
+   "lang": "ar",
+   "mode": "analyst",
+   "grounded": true,
+   "lang_ok": true,
+   "seconds": 1.21,
+   "text": "Idris Okoye يشارك في 24% من تمريرات Riverside FC (اللاعب المعتاد: نحو 9%).",
+   "unsupported": []
+  },
+  {
+   "kind": "momentum_swing",
+   "lang": "es",
+   "mode": "analyst",
+   "grounded": true,
+   "lang_ok": true,
+   "seconds": 1.09,
+   "text": "El impulso pasó de -16 a +47: Riverside FC domina el terreno y la presión.",
+   "unsupported": []
+  }
+ ],
+ "agents": [
+  {
+   "question": "Who is on top right now?",
+   "lang": "en",
+   "backend": "azure-openai",
+   "tools": [
+    "match_snapshot"
+   ],
+   "grounded": true,
+   "unsupported": [],
+   "seconds": 2.0,
+   "answer": "Northgate United are on top right now: they lead 2-0 and have more shots and expected goals."
+  },
+  {
+   "question": "Quels ont été les moments clés ?",
+   "lang": "fr",
+   "backend": "azure-openai",
+   "tools": [
+    "key_moments"
+   ],
+   "grounded": true,
+   "unsupported": [],
+   "seconds": 1.9,
+   "answer": "Northgate United a ouvert le score grâce à Cole Whitaker (20e), puis Amir Zaki a marqué aussi pour Northgate United (30e). Un tournant du match : un carton rouge reçu par Sami Haddad (30e), qui a changé la dynamique."
+  },
+  {
+   "question": "¿Quién ha dado más pases?",
+   "lang": "es",
+   "backend": "azure-openai",
+   "tools": [
+    "top_players"
+   ],
+   "grounded": true,
+   "unsupported": [],
+   "seconds": 1.8,
+   "answer": "El que más pases ha dado es Leo Brandt, con 50."
+  },
+  {
+   "question": "How does Low block 5-3-2 do against Possession 4-3-3 of a title contender?",
+   "lang": "en",
+   "backend": "azure-openai",
+   "tools": [
+    "test_tactic"
+   ],
+   "grounded": true,
+   "unsupported": [],
+   "seconds": 8.1,
+   "answer": "Against a title contender playing Possession 4-3-3, Low block 5-3-2 earns 0.7 points per game on average (20 simulated matches). It concedes more chances than it creates (0.55 xG for vs 1.08 xG against)."
+  },
+  {
+   "question": "Que donne Gegenpress 4-2-3-1 contre Direct 4-4-2 ?",
+   "lang": "fr",
+   "backend": "azure-openai",
+   "tools": [
+    "test_tactic"
+   ],
+   "grounded": true,
+   "unsupported": [],
+   "seconds": 5.4,
+   "answer": "Le Gegenpress 4-2-3-1 contre le Direct 4-4-2 rapporte environ 1.6 point par match, sur une vingtaine de matchs simulés. Cette tactique est notre meilleure option face à cette adversité."
+  },
+  {
+   "question": "How realistic is the simulator?",
+   "lang": "en",
+   "backend": "azure-openai",
+   "tools": [
+    "realism"
+   ],
+   "grounded": true,
+   "unsupported": [],
+   "seconds": 1.9,
+   "answer": "The simulator is quite realistic: it matches real football well on total stats and spatial patterns, based on 1,446 real league matches and additional tracking data."
+  }
+ ]
+}

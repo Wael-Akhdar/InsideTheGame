@@ -27,6 +27,21 @@ GamePulse is built on **Microsoft Agent Framework** (Python, `agent-framework-co
 | Models | `gamepulse/agents/clients.py` | Azure OpenAI deployment (`AZURE_OPENAI_ENDPOINT`, `AZURE_OPENAI_API_KEY`, `AZURE_OPENAI_DEPLOYMENT`) or a Microsoft Foundry project (`FOUNDRY_PROJECT_ENDPOINT`, `FOUNDRY_MODEL`, Azure CLI login). Without them, an offline planner plays the model: same agents, same tool-calling loop, same checks. |
 | MCP server | `gamepulse/mcp_server.py` | `python -m gamepulse.mcp_server` (stdio) or `--http 8001`; the API serves the same tools at `/mcp/`. |
 
+## The model: a fine-tuned GamePulse commentator on Microsoft Foundry
+`gpt-4.1-mini` fine-tuned (supervised, 2 epochs, about USD 0.66 of training) on 264 commentary examples built from the engine
+(`tools/build_finetune_data.py`, data in `data/finetune/`): the exact prompt the overlay narrator sends, answered in English, French,
+Spanish or Arabic, for a casual fan or an analyst, with only the numbers present in the facts. Every training example passed the
+fact-checker. Deployed on a Developer deployment (pay per token, no hourly hosting fee; it expires after 24 hours and is redeployed in
+one click, and the app falls back to the offline planner meanwhile).
+
+Evaluation (`python tools/eval_model.py --n 40`, results in `docs/MODEL_EVAL.json`), on matches the model never saw:
+| Check | Result |
+|---|---|
+| Overlay sentences whose every number is in their facts | 40 / 40 (English 8/8, French 9/9, Spanish 8/8, Arabic 15/15) |
+| Sentences in the requested language | 40 / 40 |
+| Agent answers (analyst and coach, 3 languages) that called a tool | 6 / 6 |
+| Agent answers whose every number comes from a tool result | 6 / 6 |
+
 ## Try it
 
 ```bash
