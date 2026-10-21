@@ -9,7 +9,7 @@ import imageio_ffmpeg
 
 HERE = Path(__file__).resolve().parent
 OUT = HERE / "voice"
-VOICE, RATE = "en-GB-RyanNeural", "+6%"
+VOICE, RATE = "en-US-AndrewMultilingualNeural", "+4%"
 
 LINES = {
     "title": "GamePulse. Feel the match, understand the moment.",
