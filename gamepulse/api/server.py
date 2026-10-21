@@ -35,6 +35,12 @@ _mcp_app = mcp_server.streamable_http_app(streamable_http_path="/", stateless_ht
 
 @contextlib.asynccontextmanager
 async def _lifespan(_app):
+    # import everything the background threads and tools use before any of them starts: concurrent first imports from
+    # several threads are not safe and broke the first simulation and the first keep-alive check
+    import azure.identity  # noqa: F401
+
+    from .. import lab, strength  # noqa: F401
+    from ..agents import interpreter, tools  # noqa: F401
     from ..agents.keepalive import keep_alive_loop
 
     task = asyncio.create_task(keep_alive_loop())  # recreates the fine-tuned model deployment when it expires (Azure only)

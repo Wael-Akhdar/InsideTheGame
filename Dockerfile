@@ -1,7 +1,7 @@
 # GamePulse web app: FastAPI + agents + MCP endpoint (/mcp/). Real-match data (Wyscout, CC BY 4.0) is downloaded at build time.
 FROM python:3.10-slim
 WORKDIR /app
-ENV PYTHONDONTWRITEBYTECODE=1 PYTHONUNBUFFERED=1
+ENV PYTHONDONTWRITEBYTECODE=1 PYTHONUNBUFFERED=1 LAB_WORKERS=1
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 COPY gamepulse ./gamepulse

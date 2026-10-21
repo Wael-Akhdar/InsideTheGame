@@ -6,6 +6,7 @@ Every tool returns plain JSON-friendly data with the numbers it is based on: age
 from __future__ import annotations
 
 import json
+import os
 from pathlib import Path
 from typing import Annotated, Any, Optional
 
@@ -129,7 +130,7 @@ def test_tactic(tactic: str, opponents: Optional[list[str]] = None, level: str =
 
     mine = resolve_tactic(tactic)
     opps = [o for o in (opponents or []) if o in PRESETS] or [p for p in PRESETS if p != mine.name][:4]
-    r = evaluate(mine, opps, n=max(4, min(matches, 40)), workers=4, level=level, opponent_level=opponent_level)
+    r = evaluate(mine, opps, n=max(4, min(matches, 16)), workers=None, level=level, opponent_level=opponent_level)
     return {"tactic": mine.name, "level": level, "opponent_level": opponent_level, "matches_per_opponent": r["n"],
             "points_per_game": r["overall_ppg"],
             "matchups": [{k: m[k] for k in ("opponent", "win", "draw", "loss", "ppg", "gf", "ga", "xgf", "xga", "possession")} for m in r["matchups"]],
@@ -145,7 +146,7 @@ def what_if(tactic: str, scenario: str, opponent: str = "Balanced 4-3-3", level:
     scn = interpret_scenario(scenario)
     if not scn["rules"]:
         return {"error": "could not understand the scenario", "scenario": scenario}
-    r = run_what_if(tactic, scn, [opponent], max(4, min(matches, 40)), 1000, level, opponent_level)
+    r = run_what_if(tactic, scn, [opponent], max(4, min(matches, 16)), 1000, level, opponent_level)
     m = r["matchups"][0]
     return {"tactic": tactic, "opponent": opponent, "scenario": [describe_rule(x) for x in scn["rules"]], "matches": r["n"],
             "points_per_game_before": r["baseline_ppg"], "points_per_game_after": r["scenario_ppg"], "verdict": r["verdict"],

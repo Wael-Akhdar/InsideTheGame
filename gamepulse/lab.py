@@ -1,6 +1,7 @@
 """Tactic Lab: stress-test a coach's tactic against many opponent tactics over many simulated matches."""
 from __future__ import annotations
 
+import multiprocessing
 import os
 from concurrent.futures import ProcessPoolExecutor
 from typing import Any
@@ -93,9 +94,10 @@ def evaluate(tactic: Any, opponents: list[Any] | None = None, n: int = 20, base_
         for k in range(n):
             jobs.append((mine.to_dict(), o.to_dict(), base_seed + oi * 10_000 + k, k % 2 == 0, scn, q_mine, q_other))
             owners.append(oi)
-    workers = workers or min(os.cpu_count() or 2, 8)
+    workers = workers or int(os.getenv("LAB_WORKERS", min(os.cpu_count() or 2, 8)))  # the container sets 1: no worker processes in the web server
     if workers > 1 and len(jobs) > 8:
-        with ProcessPoolExecutor(max_workers=workers) as ex:
+        # forkserver: worker processes never inherit the server's threads (model calls, keep-alive), which can deadlock a fork
+        with ProcessPoolExecutor(max_workers=workers, mp_context=multiprocessing.get_context("forkserver")) as ex:
             results = list(ex.map(play_one, jobs, chunksize=4))
     else:
         results = [play_one(j) for j in jobs]
