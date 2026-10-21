@@ -194,7 +194,8 @@ _NUM = re.compile(r"(?<![\w.])-?\d+(?:\.\d+)?")
 
 
 def _numbers(obj: Any) -> set[float]:
-    text = obj if isinstance(obj, str) else json.dumps(obj, default=str)
+    text = obj if isinstance(obj, str) else json.dumps(obj, ensure_ascii=False, default=str)
+    text = re.sub(r"(\d),(\d)", r"\1.\2", text)  # decimal comma (French, Spanish): 1,67 is one number
     return {float(x) for x in _NUM.findall(text)}
 
 

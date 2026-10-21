@@ -22,6 +22,7 @@ def test_fact_check_flags_invented_numbers():
     assert fact_check("A have 9 shots and 1.2 xG.", res)["grounded"]
     bad = fact_check("A have 17 shots.", res)
     assert not bad["grounded"] and bad["unsupported"] == [17.0]
+    assert fact_check("Ils prennent 1,67 point par match.", [("t", {"ppg": 1.67})])["grounded"]  # decimal comma
 
 
 def test_routing():
