@@ -1,7 +1,8 @@
 """Keep the fine-tuned model deployed.
 
-Developer deployments of fine-tuned models have no hourly fee but are removed after 24 hours. When the app runs on Azure with a
-managed identity allowed to manage the Foundry resource, this task checks the deployment every 30 minutes and recreates it
+Developer deployments of fine-tuned models have no hourly fee but are removed after 24 hours. When the app has an identity allowed
+to manage the Foundry resource (a service principal given by AZURE_TENANT_ID / AZURE_CLIENT_ID / AZURE_CLIENT_SECRET, or a managed
+identity), this task checks the deployment every 30 minutes and recreates it
 when it is gone (Azure Resource Manager API). Meanwhile the agents answer with the offline planner, so nothing breaks.
 
 Configuration (environment variables, all required to enable it):
@@ -36,9 +37,14 @@ def _url(c: dict) -> str:
 
 
 def _token() -> str:
-    from azure.identity import ManagedIdentityCredential
+    """A service principal (AZURE_TENANT_ID, AZURE_CLIENT_ID, AZURE_CLIENT_SECRET) or the app's managed identity."""
+    from azure.identity import ClientSecretCredential, ManagedIdentityCredential
 
-    return ManagedIdentityCredential().get_token("https://management.azure.com/.default").token
+    if os.getenv("AZURE_CLIENT_SECRET"):
+        cred = ClientSecretCredential(os.environ["AZURE_TENANT_ID"], os.environ["AZURE_CLIENT_ID"], os.environ["AZURE_CLIENT_SECRET"])
+    else:
+        cred = ManagedIdentityCredential()
+    return cred.get_token("https://management.azure.com/.default").token
 
 
 def ensure_deployed() -> str:
