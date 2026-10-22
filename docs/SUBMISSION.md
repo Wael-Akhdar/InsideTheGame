@@ -8,7 +8,7 @@
 |---|---|
 | Live demo (free, no login, available until judging ends) | https://gamepulse.lemonbay-43a4c2ef.polandcentral.azurecontainerapps.io |
 | GitHub repository (public) | https://github.com/Wael-Akhdar/InsideTheGame |
-| Demo video (YouTube, < 2 min) | *add the link after upload* |
+| Demo video (YouTube, < 2 min) | https://youtu.be/HjBZtuYut1M |
 | Team | Wael Akhdar, Jessim Ziani (EPITA) |
 
 ## Project name

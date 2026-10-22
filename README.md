@@ -4,7 +4,7 @@
 AI match intelligence and a tactical lab for football: multi-agent explanations of what happens on the pitch, in the viewer's language,
 and a match simulator a coach can trust because every number is checked against real football.
 
-**[▶ Live demo](https://gamepulse.lemonbay-43a4c2ef.polandcentral.azurecontainerapps.io)** · Demo video: *link added at submission* ·
+**[▶ Live demo](https://gamepulse.lemonbay-43a4c2ef.polandcentral.azurecontainerapps.io)** · **[▶ Demo video](https://youtu.be/HjBZtuYut1M)** ·
 Built for the *Inside the Game: Developer Hackathon* (Microsoft x Premier League).
 
 ![Live match: 22 players, live charts and explained insights](docs/img/live.png)
