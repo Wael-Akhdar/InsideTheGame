@@ -14,13 +14,23 @@ Optional: AZURE_FT_CAPACITY (tokens per minute in thousands, default 50), KEEPAL
 from __future__ import annotations
 
 import asyncio
+import hashlib
 import json
 import os
+import time
 import urllib.error
 import urllib.request
 
 API = "2024-10-01"
-STATE: dict = {"enabled": False, "last": None, "error": None}
+STATE: dict = {"enabled": False, "last": None, "error": None, "checks": 0, "started": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())}
+
+
+def _credential_id() -> str:
+    """Which credential is used, without revealing it: the first 8 hex digits of the secret's SHA-256 (compare with your own copy)."""
+    secret = os.getenv("AZURE_CLIENT_SECRET")
+    if not secret:
+        return "managed identity"
+    return f"client secret sha256:{hashlib.sha256(secret.encode()).hexdigest()[:8]}"
 
 
 def _cfg() -> dict | None:
@@ -71,12 +81,15 @@ async def keep_alive_loop() -> None:
     if _cfg() is None:
         return
     STATE["enabled"] = True
+    STATE["credential"] = _credential_id()
     minutes = float(os.getenv("KEEPALIVE_MINUTES", "30"))
     while True:
         try:
+            STATE["checks"] += 1
             STATE["last"] = await asyncio.to_thread(ensure_deployed)
             STATE["error"] = None
         except Exception as exc:  # never take the app down for this
+            STATE["last"] = None
             STATE["error"] = f"{type(exc).__name__}: {str(exc)[:200]}"
         print(f"[keepalive] {STATE}", flush=True)
         await asyncio.sleep(minutes * 60)
